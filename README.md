@@ -14,13 +14,14 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 2 (Synthetic Financial Dataset Generation)
+## Current Status: Phase 3 (Data Normalization Layer)
 
-This repository contains **Phase 1 & Phase 2**:
+This repository contains **Phase 1, Phase 2 & Phase 3**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
 - Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
+- Reusable in-memory data normalization service (`backend/services/normalization.py`).
 - Dynamic dataset statistics endpoint (`GET /api/demo-data/stats`).
-- Pytest suite testing dataset schemas, record counts, ground truth parity, and seed reproducibility.
+- Comprehensive Pytest suite covering health checks, dataset integrity, seed reproducibility, and normalization logic.
 - Modern React + Vite frontend dashboard shell with Tailwind CSS and React Router.
 
 ---
@@ -40,6 +41,20 @@ Ground truth annotations represent the verified "gold standard" target state for
 - **Verified Accuracy**: Percentage of algorithmic matches that correctly match ground truth predictions.
 - **Exception Rate**: Proportion of edge-case transactions routed to the manual/AI resolution workbench.
 - **Throughput**: Records reconciled per second.
+
+---
+
+## Data Normalization
+
+The backend includes a dedicated, reusable normalization service (`backend/services/normalization.py`) that standardizes raw multi-source financial records prior to multi-source 3-way matching.
+
+### Why Normalization is Required Before Reconciliation
+In real-world financial operations, multi-source records (ERP invoices, bank feeds, payment gateway settlements) exhibit syntax, formatting, and structural discrepancies:
+- **Company Name Variations**: ERP ledgers store formal legal names (`ABC Private Limited`), bank feeds record abbreviated transfer strings (`ABC PVT LTD`), and gateways record truncated forms (`ABC Pvt Ltd`). Normalization strips legal suffixes (`Pvt`, `Limited`, `Inc`, `Corp`) and standardizes casing while retaining core entity distinctions (`ABC Technologies` vs `ABC Logistics`).
+- **Reference Discrepancies**: Invoices contain hyphenated references (`INV-001`), bank statements omit hyphens (`inv001`), and gateway entries add spaces (`INV 001`). Reference normalization converts values to sanitized uppercase tokens (`INV001`).
+- **Monetary Formatting**: Raw feeds format amounts as strings with currency symbols or commas (`₹12,500.00`, `12,500`). Amount normalization cleans string values into exact float numbers (`12500.0`).
+- **Heterogeneous Date Formats**: Bank statements and payment processors export dates in varying regional formats (`01-08-2026`, `2026-08-01`, `01/08/2026`). Normalization casts valid dates into standardized ISO strings (`2026-08-01`).
+- **Preservation of Raw Data**: Normalization generates separate normalized structures without mutating or overwriting original raw CSV fields, ensuring raw data remains available for auditability and manual review.
 
 ---
 
