@@ -1,6 +1,6 @@
 # AI Finance Controller — Multi-Source Reconciliation
 
-[![Status](https://img.shields.io/badge/Status-Phase%2012%20Completed-emerald.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
+[![Status](https://img.shields.io/badge/Status-Phase%2013%20Completed-emerald.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 [![Tests](https://img.shields.io/badge/Tests-86%2F86%20Passed-blue.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 [![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 
@@ -11,6 +11,19 @@ An enterprise-grade, high-throughput multi-source financial reconciliation platf
 3. **Payment Processor Gateways** (Razorpay, Stripe payment settlement logs)
 
 The platform processes batches of **50+ to 500+ records** per execution run, computes real-time operational metrics (**Match Rate**, **Verified Ground Truth Accuracy**, **Engine Throughput**, **Unresolved Discrepancy Exceptions**), provides **AI-Assisted Exception Diagnosis**, and maintains an **Immutable Compliance Audit Trail**.
+
+---
+
+## 📢 Problem Statement Pitches
+
+- **10-Second Pitch**:
+  *"Finance teams spend hundreds of manual hours cross-referencing invoices, bank statements, and gateway logs. Our AI Finance Controller automates this 3-way reconciliation loop while verifying accuracy and logging an audit trail."*
+
+- **30-Second Pitch**:
+  *"Multi-source financial reconciliation is slow, expensive, and error-prone. Instead of forcing uncertain matches or sending every transaction to expensive LLMs, our AI Finance Controller uses deterministic rules and RapidFuzz matching to automatically resolve 80%+ of records at 1,500+ records/sec. Uncertain exceptions are diagnosed by an AI Assistant and escalated to a human reviewer with an immutable audit log."*
+
+- **1-Minute Pitch**:
+  *"High-growth fintechs process millions in transactions across billing ledgers, bank feeds, and payment gateways like Razorpay or Stripe. Manually resolving fee variances, missing settlements, and name formatting differences creates massive audit backlog. Our AI Finance Controller solves this with a 3-way matching engine that normalizes data, scores candidate candidates, and self-evaluates accuracy against ground truth benchmarks. Obvious matches are resolved instantly; ambiguous cases are analyzed by an AI Exception Assistant that suggests root-cause fixes. Human reviewers can approve or override decisions, with every action immutably logged in SQLite for audit compliance."*
 
 ---
 
@@ -69,56 +82,46 @@ Invoice CSV                 Bank CSV                 Gateway CSV
                   ┌─────────────────────────┐
                   │ Immutable Audit Trail   │
                   │ (SQLite Database Log)   │
-                  └─────────────────────────┘
+                  └────────────┬────────────┘
+                               │
+                               v
+                  MATCHED / REVIEW / EXCEPTION
 ```
 
----
-
-## ⏱️ 5-Minute Hackathon Demo Flow
-
-Follow this exact sequence for a 5-minute hackathon evaluation:
-
-1. **Launch Dashboard (`http://localhost:5173`)**:
-   - Point out the **Executive KPI Cards** (Total Records, Match Rate %, Verified Accuracy %, Engine Throughput `records/sec`, Average Confidence %).
-   - View the **Recharts Status Donut Chart** (`MATCHED`, `REVIEW`, `EXCEPTION`) and **Exception Category Bar Chart**.
-
-2. **Run Demo Reconciliation**:
-   - Click **Run Reconciliation** (or **Use Demo Data**).
-   - Observe instant backend execution (< 100 ms) and real-time metric updates without a browser reload.
-
-3. **Inspect a Matched Record (`INV001`)**:
-   - Click **View** on invoice `INV001` in the Reconciliation table to demonstrate 3-Way Record Alignment across Invoice, Bank, and Gateway feeds with match score breakdowns.
-
-4. **Inspect an Exception & Run AI Assistant (`INV015`)**:
-   - Open invoice `INV015` (`AMOUNT_MISMATCH` exception).
-   - Click **Analyze with AI**: watch the AI Assistant diagnose the root-cause variance (e.g. currency conversion/withholding tax) and suggest an audit note with confidence score.
-
-5. **Execute Human Review & Audit Logging**:
-   - Submit **Approve Match** or **Mark Resolved** with note `"Verified against bank statement"`.
-   - Show how `final_status` updates to `RESOLVED_MANUALLY` while the original system prediction is **immutably preserved**.
-   - Navigate to `/history` to demonstrate the new entry in the **Immutable Compliance Audit Trail**.
-
-6. **Ingest Custom CSV Files (`/upload`)**:
-   - Navigate to `/upload`, drag and drop Invoice, Bank, and Gateway CSV files.
-   - Click **Validate CSV Files** to test schema checks and view 10-row preview tabs (`120 total rows — displaying first 10`).
-   - Click **Run Reconciliation** and verify that custom uploads correctly calculate Match Rate and set `Verified Accuracy: N/A` (as no ground truth exists).
+### 🗣️ Spoken Architecture Summary (30 Seconds)
+*"Raw multi-source CSV files are normalized to eliminate company name variations and reference formatting differences. The deterministic engine evaluates exact matches, while RapidFuzz calculates fuzzy text similarity and score gaps. High-confidence pairs auto-resolve as MATCHED, while uncertain records are classified into 11 exception types. An AI Assistant analyzes root causes for exceptions, recommending actions to human reviewers who make final decisions recorded in an immutable SQLite audit trail."*
 
 ---
 
-## 📌 Demo Highlight Records
+## ✨ System Feature Matrix
 
-Use these sample invoice IDs from the reproducible synthetic dataset for presentation:
+| Domain | Feature Capability | Implementation Detail |
+| :--- | :--- | :--- |
+| **Core Matching** | Multi-Source 3-Way Reconciliation | Normalizes & connects Invoices, Bank Feeds, and Payment Gateways |
+| | Data Normalization | Cleans suffixes (`Pvt Ltd` -> `Private Limited`), references, and currencies |
+| | RapidFuzz Similarity | Fuzzy matching for counterparty names and bank transaction descriptions |
+| | Candidate Scoring | Evaluates bank scores, gateway scores, and candidate score gap thresholds |
+| **Verification** | Ground Truth Benchmarking | Evaluates actual matching predictions against `ground_truth.csv` |
+| | Match Rate & Verified Accuracy | Computes automated resolution ratio vs ground-truth correctness % |
+| | Engine Throughput | Measures real-time execution throughput in `records/sec` |
+| **Exception Engine**| Discrepancy Classification | Categorizes unresolved cases into 11 specific exception types |
+| | Severity & Suggested Actions | Assigns severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) and remediation steps |
+| **AI Assistant** | AI-Assisted Diagnosis | Diagnoses root causes (e.g. MDR fees, rounding variances, duplicate payments) |
+| | Uptime Fallback Guarantee | Seamlessly switches to heuristic financial rule engine if API key is absent |
+| **Human Oversight** | Reviewer Workbench | Supports `APPROVE_MATCH`, `REJECT_MATCH`, `MARK_RESOLVED`, `KEEP_UNDER_REVIEW` |
+| | Confirmation Modals | Interactive dialogs prevent accidental overrides |
+| | Immutable Audit History | SQLite persistence of all review actions, reviewer names, notes, and timestamps |
+| **Product Experience**| Live Executive Dashboard | Live KPI cards, Recharts status donut chart, exception bar chart |
+| | Multi-Source CSV Ingestion | Drag-and-drop 3-card upload with 10-row preview tabs (`/upload`) |
+| | Search, Filters & Pagination | Interactive filtering by status, confidence range, severity, and invoice search |
 
-| Scenario | Invoice ID | Customer Name | System Status | Key Highlight |
-| :--- | :--- | :--- | :--- | :--- |
-| **Exact Match** | `INV001` | Acme Corp | `MATCHED` | 100% 3-way exact reference & amount match |
-| **Fuzzy-Name Match** | `INV008` | Beta Private Limited | `MATCHED` | RapidFuzz matches `Beta Pvt Ltd` to `Beta Private Limited` |
-| **Amount Mismatch** | `INV015` | Gamma Logistics | `EXCEPTION` | Invoice amount ₹15,000 vs Bank payment ₹14,800 |
-| **Duplicate Payment** | `INV022` | Delta Technologies | `EXCEPTION` | Multiple bank transactions referencing same invoice |
-| **Missing Bank Payment**| `INV029` | Epsilon Enterprises | `EXCEPTION` | Invoice settled on Gateway but missing in Bank feed |
-| **Ambiguous Match** | `INV036` | Zeta Solutions | `REVIEW` | Multiple close candidate scores (score gap < 10) |
-| **Gateway Fee Variance**| `INV043` | Eta Global | `EXCEPTION` | Net settlement matches gross minus 2% gateway MDR fee |
-| **AI Assistant Review** | `INV050` | Theta Systems | `EXCEPTION` | Trigger AI Assistant to view root cause analysis |
+---
+
+## ⏱️ Presentation & Hackathon Guides
+
+- 📘 [**5-Minute Demo Script**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_SCRIPT.md) — Timed presentation script for hackathon judges.
+- 📌 [**Demo Highlight Records Directory**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_RECORDS.md) — Authentic sample IDs (`INV001`, `INV066`, `INV081`, `INV091`, `INV099`, `INV104`, `INV109`, `INV113`).
+- ❓ [**Judge Q&A Guide**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/JUDGE_QA.md) — Concise answers for the 10 likely judge technical questions.
 
 ---
 
@@ -135,14 +138,6 @@ Measured performance benchmarks across varying dataset sizes (measured via `pyth
 
 ---
 
-## 🛠️ Tech Stack & Requirements
-
-- **Backend**: Python 3.14, FastAPI, Pydantic v2, SQLAlchemy 2.0, SQLite, RapidFuzz, Pytest, Uvicorn.
-- **Frontend**: React 18, Vite, React Router v6, Axios, Tailwind CSS, Recharts, Lucide Icons.
-- **Environment**: Node.js 18+, Python 3.10+.
-
----
-
 ## 💻 Installation & Running Locally
 
 ### 1. Backend Setup
@@ -151,7 +146,7 @@ Measured performance benchmarks across varying dataset sizes (measured via `pyth
 # Navigate to backend directory
 cd backend
 
-# Create virtual environment (optional but recommended)
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
@@ -203,9 +198,6 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-> [!NOTE]
-> No secrets or API keys are committed to Git. `.env` and SQLite `.db` files are strictly excluded via `.gitignore`.
-
 ---
 
 ## 📡 API Endpoints Reference
@@ -237,20 +229,27 @@ python -m pytest tests/ -v
 ```
 
 ```text
-======================= 86 passed, 12 warnings in 11.95s =======================
+====================== 86 passed, 12 warnings in 11.95s =======================
 ```
 
 ---
 
-## 🚀 Deployment Readiness
+## ⚠️ Known Limitations
 
-### Frontend Deployment (Vercel)
-- The frontend includes `frontend/vercel.json` for single-page application routing.
-- Set `VITE_API_BASE_URL` to your production backend URL in Vercel environment variables.
+1. **Synthetic Dataset Baseline**: Ground truth verification metrics rely on `data/ground_truth.csv`. Custom uploaded CSVs without ground truth report `Verified Accuracy: N/A`.
+2. **No Direct Banking API Connectors**: The hackathon prototype ingests bank CSV statements rather than live Open Banking / Plaid OAuth API connections.
+3. **No Enterprise RBAC / Authentication**: Human review actions accept a reviewer name string without full OAuth/SAML authentication.
+4. **Not Certified Accounting Software**: Designed as an intelligent reconciliation automation and audit assistant, not a certified accounting GL system.
 
-### Backend Deployment (Render / Railway)
-- Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-- Set `ALLOWED_ORIGINS` to your production Vercel frontend URL.
+---
+
+## 🚀 Future Scope & Roadmap
+
+- **Live Banking & Settlement APIs**: Integration with Plaid, Yodlee, Razorpay Settlement Webhooks, and Stripe Payout APIs.
+- **GL Accounting System Connectors**: Direct sync with QuickBooks, Xero, NetSuite, and SAP.
+- **Multi-Currency FX Normalization**: Real-time spot rate foreign exchange gain/loss calculation.
+- **Enterprise SSO & Role-Based Access Control**: Granular reviewer permission levels and approval limits.
+- **Proactive Anomaly Detection**: Unsupervised ML models for detecting fraudulent billing patterns.
 
 ---
 
@@ -261,11 +260,11 @@ python -m pytest tests/ -v
 - [x] Frontend production bundle builds cleanly (`npm run build`).
 - [x] 100% Pytest suite passing (**86 / 86 tests passed**).
 - [x] 3-Way deterministic & RapidFuzz fuzzy reconciliation working.
-- [x] Reproducible synthetic dataset generation working.
+- [x] Reproducible synthetic dataset generation working (`seed = 42`).
 - [x] Multi-source CSV upload, validation, and preview working.
 - [x] Live operational metrics & ground truth verification accuracy working.
 - [x] 11 Exception types and classifications working.
 - [x] AI Exception Assistant working (with 100% uptime heuristic fallback).
 - [x] Human Review decisions & confirmation modal working.
 - [x] Immutable SQLite audit log compliance history working.
-- [x] Secrets excluded via `.gitignore` and `.env.example` created.
+- [x] Presentation materials ([`DEMO_SCRIPT.md`](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_SCRIPT.md), [`DEMO_RECORDS.md`](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_RECORDS.md), [`JUDGE_QA.md`](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/JUDGE_QA.md)) finalized.

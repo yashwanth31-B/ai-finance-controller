@@ -1,0 +1,3 @@
+payment_id,customer_name,amount,currency,payment_date,reference,gateway,fee,net_amount
+PAY_UP_001,Acme Corp,10000.0,INR,2026-08-01,REF_UP_1,Razorpay,200.0,9800.0
+PAY_UP_002,Beta LLC,25000.0,INR,2026-08-01,REF_UP_2,Razorpay,500.0,24500.0
