@@ -106,4 +106,40 @@ export const getSingleException = async (exceptionId) => {
   return response.data;
 };
 
+/**
+ * Submit a human review decision (APPROVE_MATCH, REJECT_MATCH, MARK_RESOLVED, KEEP_UNDER_REVIEW).
+ * POST /api/reviews
+ */
+export const submitReviewAction = async (payload) => {
+  const response = await apiClient.post('/api/reviews', payload);
+  return response.data;
+};
+
+/**
+ * Fetch review history logs with optional query filters.
+ * GET /api/reviews
+ */
+export const getReviews = async (params = {}) => {
+  const response = await apiClient.get('/api/reviews', { params });
+  return response.data;
+};
+
+/**
+ * Fetch review history for a specific invoice ID.
+ * GET /api/reviews/:invoiceId
+ */
+export const getInvoiceReviews = async (invoiceId) => {
+  const response = await apiClient.get(`/api/reviews/${invoiceId}`);
+  return response.data;
+};
+
+/**
+ * Fetch immutable audit trail event logs with optional filters.
+ * GET /api/audit-trail
+ */
+export const getAuditTrail = async (params = {}) => {
+  const response = await apiClient.get('/api/audit-trail', { params });
+  return response.data;
+};
+
 export default apiClient;

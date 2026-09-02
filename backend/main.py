@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routes import health, demo_data, reconciliation, exceptions, metrics, upload
+from routes import health, demo_data, reconciliation, exceptions, metrics, upload, reviews
 from schemas import RootInfoResponse
 
 # Initialize database tables
@@ -54,6 +54,8 @@ app.include_router(reconciliation.router)
 app.include_router(exceptions.router)
 app.include_router(metrics.router)
 app.include_router(upload.router)
+app.include_router(reviews.router)
+
 
 
 

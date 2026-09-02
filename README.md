@@ -14,9 +14,9 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 9 (CSV Upload, Validation & Reconciliation Run Flow)
+## Current Status: Phase 10 (Human Review Workflow & Audit Trail)
 
-This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8 & Phase 9**:
+This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8, Phase 9 & Phase 10**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
 - Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
 - Reusable in-memory data normalization service (`backend/services/normalization.py`).
@@ -26,9 +26,11 @@ This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6,
 - Dedicated exception detection & classification layer (`backend/services/exceptions.py`).
 - Batch metrics & ground truth verification accuracy service (`backend/services/metrics.py`).
 - Secure CSV upload validation and preview service (`backend/services/upload.py`).
-- Backend API endpoints (`POST /api/upload/validate`, `POST /api/reconciliation/run-uploaded`, `GET /api/metrics`, `GET /api/reconciliation/results`, `GET /api/exceptions`).
-- Comprehensive Pytest suite with **70 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, metrics computation, CSV security validation, upload sessions, and API endpoints.
-- Professional React + Vite frontend dashboard with 3 drag-and-drop CSV upload cards, validation error badges, 10-row preview tabs, stage indicators, Recharts analytics, search/filters/pagination, and 3-way record inspection detail modals.
+- Human review decision & immutable audit trail service (`backend/services/review.py`).
+- Backend API endpoints (`POST /api/reviews`, `GET /api/reviews`, `GET /api/audit-trail`, `POST /api/upload/validate`, `POST /api/reconciliation/run-uploaded`, `GET /api/metrics`, `GET /api/reconciliation/results`, `GET /api/exceptions`).
+- Comprehensive Pytest suite with **82 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, metrics computation, CSV security validation, upload sessions, human review decisions, audit log persistence, and API endpoints.
+- Professional React + Vite frontend dashboard with Human Review Workbench modal, reviewer notes, action confirmation dialogs, review history timeline, audit trail compliance log, Recharts analytics, drag-and-drop CSV upload cards, and search/filters/pagination.
+
 
 
 
@@ -356,9 +358,35 @@ Users can upload custom multi-source financial CSV datasets at `/upload`.
 
 ---
 
+## Human Review and Audit Trail
+
+Uncertain financial reconciliation decisions (`REVIEW` or `EXCEPTION`) require explicit human intervention before closing billing ledgers.
+
+### Key Concepts & Workflow
+
+1. **Immutability of Original Engine Decisions**:
+   - System predictions (`status`, `overall_confidence_score`, selected bank/gateway IDs) are **never overwritten or deleted**.
+   - Human review actions derive a separate `final_status` (e.g. System `REVIEW` + Human `APPROVE_MATCH` = `MATCHED_APPROVED`; System `EXCEPTION` + Human `MARK_RESOLVED` = `RESOLVED_MANUALLY`).
+
+2. **Supported Review Actions**:
+   - **`APPROVE_MATCH`**: Reviewer accepts system proposed match.
+   - **`REJECT_MATCH`**: Reviewer rejects proposed candidate.
+   - **`MARK_RESOLVED`**: Reviewer confirms exception handled externally outside the engine.
+   - **`KEEP_UNDER_REVIEW`**: Reviewer leaves record pending further inquiry.
+
+3. **Audit Trail Immutability**:
+   - Every review action records an immutable row in SQLite `audit_trail` table (`POST /api/reviews`).
+   - If a reviewer updates a decision later, a new audit row is appended without mutating previous historical events.
+
+4. **Compliance Audit Workbench (`/history`)**:
+   - Filterable timeline log by Invoice ID, Actor name, and Event Type (`REVIEW_APPROVED`, `REVIEW_REJECTED`, `REVIEW_MARKED_RESOLVED`, `REVIEW_RETURNED_TO_REVIEW`).
+
+---
+
 ## Upcoming Phases
 
-- **Phase 10: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
-- **Phase 11: Human-in-the-Loop Review Workflow**: Manual override, exception resolution tracking, audit comment trails, and approval queues.
+- **Phase 11: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
+- **Phase 12: Automated Export & Accounting Sync**: PDF/Excel audit reports and GL ledger integration.
+
 
 

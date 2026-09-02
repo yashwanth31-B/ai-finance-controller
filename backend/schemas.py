@@ -60,6 +60,54 @@ class ReconciliationResultItem(BaseModel):
     exception_type: Optional[str] = None
     severity: Optional[str] = None
     suggested_action: Optional[str] = None
+    human_review_status: str = "NOT_REVIEWED"
+    final_status: Optional[str] = None
+    latest_review_action: Optional[str] = None
+
+
+class ReviewCreateRequest(BaseModel):
+    invoice_id: str
+    action: str  # APPROVE_MATCH, REJECT_MATCH, MARK_RESOLVED, KEEP_UNDER_REVIEW
+    reviewer_name: str = "Finance Reviewer"
+    note: Optional[str] = None
+
+
+class ReviewActionItem(BaseModel):
+    review_id: str
+    batch_id: Optional[str] = None
+    invoice_id: str
+    reconciliation_result_id: Optional[str] = None
+    original_system_status: str
+    original_confidence_score: float
+    original_bank_transaction_id: Optional[str] = None
+    original_gateway_payment_id: Optional[str] = None
+    review_action: str
+    reviewer_name: str
+    reviewer_note: Optional[str] = None
+    previous_final_status: str
+    new_final_status: str
+    created_at: str
+
+
+class AuditEventItem(BaseModel):
+    audit_id: str
+    event_type: str
+    invoice_id: str
+    batch_id: Optional[str] = None
+    actor: str
+    previous_state: str
+    new_state: str
+    note: Optional[str] = None
+    created_at: str
+
+
+class ReviewMetrics(BaseModel):
+    reviewed_records: int
+    approved_matches: int
+    rejected_matches: int
+    resolved_exceptions: int
+    under_review: int
+
 
 
 class ExceptionRecord(BaseModel):
