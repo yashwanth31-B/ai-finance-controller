@@ -109,6 +109,24 @@ class ReviewMetrics(BaseModel):
     under_review: int
 
 
+class AIAnalysisRequest(BaseModel):
+    invoice_id: Optional[str] = None
+    exception_id: Optional[str] = None
+
+
+class AIAnalysisResponse(BaseModel):
+    invoice_id: str
+    exception_type: str
+    severity: str
+    root_cause_summary: str
+    confidence_score: float
+    recommended_action: str
+    financial_impact_explanation: str
+    suggested_audit_note: str
+    ai_provider_used: str
+
+
+
 
 class ExceptionRecord(BaseModel):
     exception_id: str

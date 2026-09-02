@@ -142,4 +142,13 @@ export const getAuditTrail = async (params = {}) => {
   return response.data;
 };
 
+/**
+ * Trigger AI-assisted root-cause analysis for an exception record.
+ * POST /api/ai/analyze-exception
+ */
+export const analyzeExceptionWithAI = async (payload) => {
+  const response = await apiClient.post('/api/ai/analyze-exception', payload);
+  return response.data;
+};
+
 export default apiClient;

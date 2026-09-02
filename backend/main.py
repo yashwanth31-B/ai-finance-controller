@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routes import health, demo_data, reconciliation, exceptions, metrics, upload, reviews
+from routes import health, demo_data, reconciliation, exceptions, metrics, upload, reviews, ai_assistant
 from schemas import RootInfoResponse
 
 # Initialize database tables
@@ -23,16 +23,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+# Enable CORS safely for frontend
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    allowed_origins = [orig.strip() for orig in allowed_origins_env.split(",") if orig.strip()]
+else:
+    allowed_origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "*"
-    ],
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,6 +61,8 @@ app.include_router(exceptions.router)
 app.include_router(metrics.router)
 app.include_router(upload.router)
 app.include_router(reviews.router)
+app.include_router(ai_assistant.router)
+
 
 
 
