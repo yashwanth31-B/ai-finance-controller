@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -7,11 +7,17 @@ import { AlertCircle } from 'lucide-react';
 
 export const MainLayout = () => {
   const { status, appInfo, lastChecked, error, refresh } = useApiHealth(15000);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 antialiased font-sans">
       {/* Navigation Sidebar */}
-      <Sidebar apiStatus={status} appInfo={appInfo} />
+      <Sidebar
+        apiStatus={status}
+        appInfo={appInfo}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -19,6 +25,7 @@ export const MainLayout = () => {
           apiStatus={status}
           lastChecked={lastChecked}
           onRefresh={refresh}
+          onMobileToggle={() => setMobileOpen(true)}
         />
 
         {/* Backend Connectivity Alert (if offline) */}
@@ -27,7 +34,7 @@ export const MainLayout = () => {
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
               <span>
-                Backend API is currently offline at <code className="bg-rose-900/40 px-1 py-0.5 rounded text-rose-200">http://localhost:8000</code>. Start the backend with <code className="bg-rose-900/40 px-1 py-0.5 rounded text-rose-200">uvicorn main:app --reload</code> in the backend directory.
+                Unable to connect to the reconciliation service at <code className="bg-rose-900/40 px-1 py-0.5 rounded text-rose-200">http://localhost:8000</code>. Ensure the FastAPI backend is running.
               </span>
             </div>
             <button
@@ -40,7 +47,7 @@ export const MainLayout = () => {
         )}
 
         {/* Dynamic Route Content */}
-        <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           <Outlet context={{ apiStatus: status, appInfo, refreshApi: refresh }} />
         </main>
       </div>

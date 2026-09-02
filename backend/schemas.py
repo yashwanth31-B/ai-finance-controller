@@ -86,3 +86,25 @@ class ExceptionSummaryResponse(BaseModel):
     by_severity: dict[str, int]
     by_type: dict[str, int]
 
+
+class ScenarioPerformanceItem(BaseModel):
+    scenario_name: str
+    total_records: int
+    correct_results: int
+    accuracy: float
+
+
+class MetricsResponse(BaseModel):
+    total_records: int
+    automatically_matched: int
+    needs_review: int
+    exceptions: int
+    match_rate: float
+    verified_accuracy: float
+    throughput: float
+    average_confidence: float
+    reconciliation_status: dict[str, int]
+    exception_breakdown: dict[str, int]
+    scenario_performance: list[ScenarioPerformanceItem]
+
+

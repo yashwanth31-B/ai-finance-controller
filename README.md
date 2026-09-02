@@ -14,9 +14,9 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 6 (Exception Detection & Classification)
+## Current Status: Phase 8 (Professional Frontend Dashboard)
 
-This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5 & Phase 6**:
+This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7 & Phase 8**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
 - Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
 - Reusable in-memory data normalization service (`backend/services/normalization.py`).
@@ -24,10 +24,11 @@ This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5 & Phase 6
 - Smarter candidate scoring service (`backend/services/scoring.py`).
 - Multi-source 3-way reconciliation engine with ambiguity guardrails (`backend/services/reconciliation.py`).
 - Dedicated exception detection & classification layer (`backend/services/exceptions.py`).
-- Reconciliation API endpoints (`POST /api/reconciliation/run`, `GET /api/reconciliation/results`, `GET /api/reconciliation/results/{invoice_id}`).
-- Exception API endpoints (`GET /api/exceptions`, `GET /api/exceptions/{exception_id}`, `GET /api/exceptions/type/{type}`).
-- Comprehensive Pytest suite with **54 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, and API endpoints.
-- Modern React + Vite frontend dashboard shell with Tailwind CSS and React Router.
+- Batch metrics & ground truth verification accuracy service (`backend/services/metrics.py`).
+- Backend API endpoints (`GET /api/metrics`, `POST /api/reconciliation/run`, `GET /api/reconciliation/results`, `GET /api/exceptions`).
+- Comprehensive Pytest suite with **55 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, metrics computation, and API endpoints.
+- Professional React + Vite frontend dashboard with Tailwind CSS, Recharts analytics, live search/filters/pagination, and 3-way record inspection detail modals.
+
 
 ---
 
@@ -291,21 +292,56 @@ LOW      → Informational annotation only
 
 ---
 
+## Frontend Dashboard
+
+The frontend application (`frontend/`) is built with **React**, **React Router**, **Axios**, **Tailwind CSS**, and **Recharts**.
+
+### Key Features & Workflows
+
+1. **Executive KPI Metrics**:
+   - Fetched live from `GET /api/metrics`.
+   - Cards display: Total Records, Automatically Matched, Needs Review, Exceptions, Match Rate (`%`), Verified Accuracy (`%`), Engine Throughput (`records/sec`), and Average Confidence (`%`).
+
+2. **Reconciliation Status Chart (Recharts)**:
+   - Donut chart displaying real-time status proportions: `MATCHED` (Emerald), `REVIEW` (Amber), `EXCEPTION` (Rose).
+
+3. **Discrepancy Exception Breakdown Chart (Recharts)**:
+   - Bar chart showing counts per active exception category (`AMOUNT_MISMATCH`, `DUPLICATE_PAYMENT`, `MISSING_BANK_PAYMENT`, `AMBIGUOUS_MATCH`, etc.).
+
+4. **Scenario Performance Evaluation**:
+   - Sourced from ground truth benchmarks showing record counts, correct matches, and accuracy percentage per reconciliation scenario.
+
+5. **Reconciliation Table & Detail View**:
+   - Interactive table with real-time search across Invoice ID, Customer Name, Bank Transaction ID, and Gateway Payment ID.
+   - Filter dropdowns by status and confidence ranges with client-side pagination.
+   - Clickable **View** action opens a 3-way inspection modal comparing Invoice, Bank, and Gateway records side-by-side alongside match explanation statements and score metrics.
+
+6. **Exception Management Table & Detail View**:
+   - Filterable workbench by exception type, severity (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), and status.
+   - Clickable detail view showing root cause analysis, suggested remediation actions, discrepancy amounts, and candidate transaction IDs.
+
+7. **Run Reconciliation Workflow**:
+   - Prominent **Run Reconciliation** button triggers `POST /api/reconciliation/run`.
+   - Displays loading state (`Running reconciliation...`) and updates all metrics, charts, and tables dynamically without a full browser reload.
+
+---
+
 ## Frontend Routes
 
 | Route | Page | Description |
 | :--- | :--- | :--- |
-| `/` | **Dashboard** | High-level financial controller overview, KPI placeholders, and data source status |
-| `/reconciliation` | **Reconciliation** | 3-way multi-source matching engine architecture |
-| `/exceptions` | **Exceptions** | Unresolved discrepancy classification and review workbench |
+| `/` | **Dashboard** | Executive overview, live KPI cards, Recharts status & exception analytics, scenario benchmarks |
+| `/reconciliation` | **Reconciliation** | Interactive 3-way reconciliation results table with search, filters, pagination & detail modal |
+| `/exceptions` | **Exceptions** | Discrepancy management workbench with severity filtering, suggested actions & detail modal |
 | `/upload` | **Data Ingestion** | Multi-source batch ingestion dropzones (50+ records) |
 | `/history` | **Run History** | Historical audit trail of batch reconciliation executions |
+| `/reports` | **Reports** | Exportable financial audit reports & PDF analytics |
 | `/settings` | **Settings** | Matching tolerances, rule thresholds, and API connection status |
 
 ---
 
 ## Upcoming Phases
 
-- **Phase 7: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
-- **Phase 8: Human-in-the-Loop Review Workflow**: Manual override, exception resolution tracking, audit comment trails, and approval queues.
-- **Phase 9: Performance & Analytics**: Live throughput metrics, match rate trends, exportable audit PDF reports, and interactive dashboards.
+- **Phase 9: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
+- **Phase 10: Human-in-the-Loop Review Workflow**: Manual override, exception resolution tracking, audit comment trails, and approval queues.
+

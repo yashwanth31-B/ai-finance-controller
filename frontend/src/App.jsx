@@ -6,6 +6,7 @@ import Reconciliation from './pages/Reconciliation';
 import Exceptions from './pages/Exceptions';
 import Upload from './pages/Upload';
 import History from './pages/History';
+import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="exceptions" element={<Exceptions />} />
           <Route path="upload" element={<Upload />} />
           <Route path="history" element={<History />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
