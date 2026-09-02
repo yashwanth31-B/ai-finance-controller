@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routes import health
+from routes import health, demo_data
 from schemas import RootInfoResponse
 
 # Initialize database tables
@@ -49,6 +49,7 @@ def read_root():
 
 # Register route modules
 app.include_router(health.router)
+app.include_router(demo_data.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -14,14 +14,32 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 1 (Project Foundation)
+## Current Status: Phase 2 (Synthetic Financial Dataset Generation)
 
-This repository contains **Phase 1: Project Foundation**:
+This repository contains **Phase 1 & Phase 2**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
-- Health check endpoints (`/` and `/api/health`) with CORS configured for the React frontend.
-- Pytest test suite verifying backend operational status and headers.
-- Modern React + Vite frontend with Tailwind CSS, React Router, Axios client, and a finance dashboard layout.
-- All placeholder pages and routes (`/`, `/reconciliation`, `/exceptions`, `/upload`, `/history`, `/settings`).
+- Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
+- Dynamic dataset statistics endpoint (`GET /api/demo-data/stats`).
+- Pytest suite testing dataset schemas, record counts, ground truth parity, and seed reproducibility.
+- Modern React + Vite frontend dashboard shell with Tailwind CSS and React Router.
+
+---
+
+## Synthetic Dataset
+
+The system generates a reproducible multi-source financial dataset (120 invoice records across 10 realistic operational reconciliation scenarios) stored in `data/`:
+
+1. **`data/invoices.csv`**: Internal ERP billing ledger records containing invoice IDs, customer legal names, invoice numbers, amounts, dates, references, and payment statuses.
+2. **`data/bank_transactions.csv`**: Direct bank feed statement entries (`CREDIT` type) with bank transaction IDs, descriptions, credit amounts, dates, and bank references.
+3. **`data/gateway_transactions.csv`**: Payment gateway settlement reports from processors (**Razorpay**, **Stripe**, **PayU**) including payment IDs, gross amounts, processing fees, net settled amounts, payment dates, and gateway references.
+4. **`data/ground_truth.csv`**: Baseline reconciliation mappings pairing each invoice with its expected bank transaction ID, expected gateway payment ID, expected resolution status, and specific scenario classification.
+
+### Why Ground Truth is Included
+Ground truth annotations represent the verified "gold standard" target state for the dataset. By including expected transaction mappings and scenario classifications (e.g., `exact_match`, `customer_name_variation`, `amount_mismatch`, `gateway_fee`, `duplicate_payment`, `missing_payment`, `currency_mismatch`), the project can automatically measure quantitative performance metrics in subsequent phases:
+- **Match Rate**: Percentage of total invoices successfully resolved by matching algorithms.
+- **Verified Accuracy**: Percentage of algorithmic matches that correctly match ground truth predictions.
+- **Exception Rate**: Proportion of edge-case transactions routed to the manual/AI resolution workbench.
+- **Throughput**: Records reconciled per second.
 
 ---
 

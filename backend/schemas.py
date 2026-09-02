@@ -14,3 +14,11 @@ class SystemMetricPlaceholder(BaseModel):
     verified_accuracy: float = 0.0
     throughput: float = 0.0
     unresolved_exceptions: int = 0
+
+
+class DemoDataStatsResponse(BaseModel):
+    invoice_records: int
+    bank_records: int
+    gateway_records: int
+    ground_truth_records: int
+
