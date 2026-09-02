@@ -14,17 +14,19 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 5 (Fuzzy Matching & Smarter Candidate Scoring)
+## Current Status: Phase 6 (Exception Detection & Classification)
 
-This repository contains **Phase 1, Phase 2, Phase 3, Phase 4 & Phase 5**:
+This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5 & Phase 6**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
 - Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
 - Reusable in-memory data normalization service (`backend/services/normalization.py`).
 - RapidFuzz fuzzy text similarity matching engine (`backend/services/fuzzy_matching.py`).
 - Smarter candidate scoring service (`backend/services/scoring.py`).
 - Multi-source 3-way reconciliation engine with ambiguity guardrails (`backend/services/reconciliation.py`).
+- Dedicated exception detection & classification layer (`backend/services/exceptions.py`).
 - Reconciliation API endpoints (`POST /api/reconciliation/run`, `GET /api/reconciliation/results`, `GET /api/reconciliation/results/{invoice_id}`).
-- Comprehensive Pytest suite with 41 unit tests verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, and API endpoints.
+- Exception API endpoints (`GET /api/exceptions`, `GET /api/exceptions/{exception_id}`, `GET /api/exceptions/type/{type}`).
+- Comprehensive Pytest suite with **54 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, and API endpoints.
 - Modern React + Vite frontend dashboard shell with Tailwind CSS and React Router.
 
 ---
@@ -259,6 +261,36 @@ python -m pytest tests/ -v
 
 ---
 
+## Exception Detection
+
+All reconciliation records that cannot be cleanly resolved are classified by the dedicated `backend/services/exceptions.py` layer.
+
+### Supported Exception Types
+
+| Exception Type | Severity | Condition |
+| :--- | :--- | :--- |
+| `CURRENCY_MISMATCH` | CRITICAL | Invoice currency ≠ payment currency |
+| `DUPLICATE_PAYMENT` | CRITICAL | Transaction ID used across multiple invoices |
+| `AMBIGUOUS_MATCH` | HIGH | Multiple candidates with identical/close confidence scores |
+| `AMOUNT_MISMATCH` | HIGH | Customer/reference match exists but amounts differ |
+| `MISSING_BANK_PAYMENT` | HIGH | No viable bank transaction found for invoice |
+| `MISSING_GATEWAY_PAYMENT` | HIGH | No viable gateway settlement found for invoice |
+| `CUSTOMER_MISMATCH` | MEDIUM | Weak name alignment between invoice and payment records |
+| `REFERENCE_MISMATCH` | MEDIUM | Reference IDs diverge between sources |
+| `DATE_OUT_OF_RANGE` | MEDIUM | Payment date falls outside acceptable proximity tolerance |
+| `POSSIBLE_GATEWAY_FEE` | MEDIUM | Gateway net_amount < invoice amount by gateway processing fee |
+
+### Severity Matrix
+
+```
+CRITICAL → Immediate investigation required
+HIGH     → Requires review before closing invoice
+MEDIUM   → Flag for periodic audit, safe to defer
+LOW      → Informational annotation only
+```
+
+---
+
 ## Frontend Routes
 
 | Route | Page | Description |
@@ -274,7 +306,6 @@ python -m pytest tests/ -v
 
 ## Upcoming Phases
 
-- **Phase 2: Ingestion & Parsing Engine**: Multi-source file ingestion (CSV/JSON/MT940) for 50+ records with Pandas and SQLite indexing.
-- **Phase 3: 3-Way Reconciliation Core**: Deterministic rule matching, tolerance computation, and exception classification.
-- **Phase 4: AI Exception Assistant**: AI-powered fuzzy discrepancy matching and root-cause analysis.
-- **Phase 5: Performance & Analytics**: Live throughput metrics, match rates, and exportable audit reports.
+- **Phase 7: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
+- **Phase 8: Human-in-the-Loop Review Workflow**: Manual override, exception resolution tracking, audit comment trails, and approval queues.
+- **Phase 9: Performance & Analytics**: Live throughput metrics, match rate trends, exportable audit PDF reports, and interactive dashboards.

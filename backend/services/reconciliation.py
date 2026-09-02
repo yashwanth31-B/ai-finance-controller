@@ -1,13 +1,14 @@
 """
-Multi-Source 3-Way Reconciliation Engine
-========================================
-Runs deterministic & fuzzy matching across Invoice, Bank Transaction, and Payment Gateway records.
+Multi-Source 3-Way Reconciliation Engine & Exception Classifier
+================================================================
+Runs deterministic & fuzzy matching across Invoice, Bank Transaction, and Payment Gateway records,
+classifying exceptions and generating structured audit records.
 
 Classification Thresholds:
 - 90 to 100: MATCHED
 - 70 to 89: REVIEW
 - Below 70: EXCEPTION
-- Ambiguous top candidates: REVIEW (with reason "AMBIGUOUS_CANDIDATES" / "Multiple possible matches")
+- Ambiguous top candidates: REVIEW (with reason "AMBIGUOUS_CANDIDATES")
 """
 
 import os
@@ -17,6 +18,12 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from services.normalization import normalize_record
 from services.scoring import score_candidate
+from services.exceptions import (
+    reset_exceptions_cache,
+    generate_exception_record,
+    SEVERITY_LEVELS,
+    SUGGESTED_ACTIONS
+)
 
 
 # Global in-memory cache for latest reconciliation execution results
@@ -44,20 +51,27 @@ def run_reconciliation_batch(
     1. Normalizes all records in memory
     2. Searches best candidates for Bank and Gateway using RapidFuzz matching
     3. Calculates deterministic & fuzzy confidence scores
-    4. Detects ambiguity and classifies results into MATCHED / REVIEW / EXCEPTION
+    4. Detects transaction reuse / duplicate payment conflicts across batch
+    5. Classifies exceptions across 10 discrepancy categories
     """
     start_time = time.time()
     batch_id = f"batch-{uuid.uuid4().hex[:8]}"
+
+    # Reset exceptions cache for fresh run execution
+    reset_exceptions_cache()
 
     # 1. Normalize datasets
     norm_invoices = [normalize_record(inv) for inv in invoices]
     norm_bank = [normalize_record(b) for b in bank_txns]
     norm_gateway = [normalize_record(g) for g in gateway_txns]
 
-    results: List[Dict[str, Any]] = []
-    matched_count = 0
-    review_count = 0
-    exception_count = 0
+    # Pre-index candidates by ID for fast lookup
+    bank_by_id = {str(b["original"].get("transaction_id", "")): b for b in norm_bank}
+    gw_by_id = {str(g["original"].get("payment_id", "")): g for g in norm_gateway}
+
+    prelim_results: List[Dict[str, Any]] = []
+    bank_id_assignments: Dict[str, List[str]] = {}
+    gw_id_assignments: Dict[str, List[str]] = {}
 
     for inv_item in norm_invoices:
         raw_inv = inv_item["original"]
@@ -107,6 +121,12 @@ def run_reconciliation_batch(
         top_gw_score = top_gw["score"] if top_gw else 0.0
         second_gw_score = second_gw["score"] if second_gw else 0.0
         selected_gw_id = top_gw["id"] if (top_gw and top_gw_score >= 40.0) else None
+
+        # Record assignment frequency for duplicate transaction reuse detection
+        if selected_bank_id:
+            bank_id_assignments.setdefault(selected_bank_id, []).append(inv_id)
+        if selected_gw_id:
+            gw_id_assignments.setdefault(selected_gw_id, []).append(inv_id)
 
         # Candidate ranking metrics
         best_candidate_score = max(top_bank_score, top_gw_score)
@@ -162,8 +182,88 @@ def run_reconciliation_batch(
 
         mismatched_fields_set.difference_update(matched_fields_set)
 
-        # Determine Classification & Matching Method
-        if is_ambiguous:
+        # Format amount float
+        try:
+            inv_amt = float(raw_inv.get("amount", 0.0))
+        except (ValueError, TypeError):
+            inv_amt = 0.0
+
+        prelim_results.append({
+            "raw_inv": raw_inv,
+            "inv_norm": inv_norm,
+            "invoice_id": inv_id,
+            "customer_name": str(raw_inv.get("customer_name", "")),
+            "invoice_amount": inv_amt,
+            "invoice_date": str(raw_inv.get("invoice_date", "")),
+            "invoice_currency": str(raw_inv.get("currency", "")),
+            "selected_bank_id": selected_bank_id,
+            "selected_gw_id": selected_gw_id,
+            "top_bank": top_bank,
+            "top_gw": top_gw,
+            "top_bank_score": top_bank_score,
+            "top_gw_score": top_gw_score,
+            "overall_confidence": overall_confidence,
+            "is_ambiguous": is_ambiguous,
+            "matched_fields_set": matched_fields_set,
+            "mismatched_fields_set": mismatched_fields_set,
+            "fuzzy_cust_score": fuzzy_cust_score,
+            "desc_similarity": desc_similarity,
+            "best_candidate_score": best_candidate_score,
+            "second_best_candidate_score": second_best_candidate_score,
+            "candidate_score_gap": candidate_score_gap,
+            "cand_matching_method": cand_matching_method,
+            "bank_scores": bank_scores,
+            "gateway_scores": gateway_scores
+        })
+
+    # Second Pass: Duplicate transaction check, final classification, and exception generation
+    results: List[Dict[str, Any]] = []
+    matched_count = 0
+    review_count = 0
+    exception_count = 0
+
+    for p in prelim_results:
+        inv_id = p["invoice_id"]
+        inv_amt = p["invoice_amount"]
+        selected_bank_id = p["selected_bank_id"]
+        selected_gw_id = p["selected_gw_id"]
+        overall_confidence = p["overall_confidence"]
+        is_ambiguous = p["is_ambiguous"]
+        cand_matching_method = p["cand_matching_method"]
+
+        # Duplicate payment check across batch
+        is_duplicate = (
+            (selected_bank_id and len(bank_id_assignments.get(selected_bank_id, [])) > 1) or
+            (selected_gw_id and len(gw_id_assignments.get(selected_gw_id, [])) > 1)
+        )
+
+        # Gateway Fee Detection
+        top_g = p["top_gw"]
+        gw_cand = top_g["raw"] if top_g else {}
+        gw_amt = 0.0
+        gw_fee = 0.0
+        gw_net = 0.0
+        gw_gross = 0.0
+        is_gateway_fee_case = False
+        if top_g:
+            try:
+                gw_amt = float(gw_cand.get("amount", 0.0))
+                gw_fee = float(gw_cand.get("fee", 0.0))
+                gw_net = float(gw_cand.get("net_amount", 0.0))
+                if gw_net == 0.0 and gw_amt > gw_fee:
+                    gw_net = gw_amt - gw_fee
+                gw_gross = gw_amt if (gw_amt > gw_net) else (gw_net + gw_fee)
+                if gw_fee > 0 and gw_net > 0 and abs(gw_fee - (inv_amt - gw_net)) < 0.01:
+                    is_gateway_fee_case = True
+            except (ValueError, TypeError):
+                pass
+
+        # Initial Status Determination
+        if is_duplicate:
+            status = "EXCEPTION"
+            matching_method = "NO_MATCH"
+            explanation = "Transaction ID assigned to multiple invoices in batch (DUPLICATE_PAYMENT)."
+        elif is_ambiguous:
             status = "REVIEW"
             matching_method = "AMBIGUOUS"
             explanation = "Multiple possible matches identified with identical or close confidence scores (AMBIGUOUS_CANDIDATES)."
@@ -171,6 +271,10 @@ def run_reconciliation_batch(
             status = "MATCHED"
             matching_method = cand_matching_method
             explanation = f"High-confidence match verified across records using {matching_method} matching."
+        elif is_gateway_fee_case:
+            status = "REVIEW"
+            matching_method = cand_matching_method if cand_matching_method != "NO_MATCH" else "NORMALIZED"
+            explanation = f"Gateway net settlement (₹{gw_net}) differs from gross invoice (₹{inv_amt}) due to ₹{gw_fee} gateway fee."
         elif overall_confidence >= 70.0:
             status = "REVIEW"
             matching_method = cand_matching_method if cand_matching_method != "NO_MATCH" else "FUZZY"
@@ -180,6 +284,116 @@ def run_reconciliation_batch(
             matching_method = "NO_MATCH"
             explanation = f"Low confidence match (score {overall_confidence}) or missing payment records."
 
+        # Exception Classification & Record Generation
+        # Trigger on: non-MATCHED status, duplicate, or missing feed
+        # POSSIBLE_GATEWAY_FEE only when bank matches invoice amount perfectly
+        exc_id = None
+        exc_type = None
+        severity = None
+        suggested_action = None
+
+        has_missing_feed = (selected_bank_id is None) or (selected_gw_id is None)
+
+        # Gateway fee case only applies when bank amount matches invoice exactly
+        bank_cand_amt = 0.0
+        if selected_bank_id:
+            top_b_raw = p["top_bank"]["raw"] if p["top_bank"] else {}
+            try:
+                bank_cand_amt = float(top_b_raw.get("amount", 0.0))
+            except (ValueError, TypeError):
+                pass
+        bank_matches_perfectly = selected_bank_id and abs(inv_amt - bank_cand_amt) < 0.01
+        # POSSIBLE_GATEWAY_FEE is an informational audit exception — surface it whenever
+        # bank reconciles the invoice perfectly but gateway net_amount differs due to fee.
+        reportable_gateway_fee = is_gateway_fee_case and bank_matches_perfectly
+
+
+        if status != "MATCHED" or is_duplicate or has_missing_feed or reportable_gateway_fee:
+            top_b = p["top_bank"]
+            bank_cand = top_b["raw"] if top_b else {}
+
+            cand_amt = 0.0
+            cand_curr = ""
+            if top_b and selected_bank_id:
+                try:
+                    cand_amt = float(bank_cand.get("amount", 0.0))
+                except (ValueError, TypeError):
+                    pass
+                cand_curr = str(bank_cand.get("currency", ""))
+            elif top_g and selected_gw_id:
+                try:
+                    cand_amt = float(gw_cand.get("amount", 0.0))
+                except (ValueError, TypeError):
+                    pass
+                cand_curr = str(gw_cand.get("currency", ""))
+
+            # Classify in priority order
+            if is_duplicate:
+                exc_type = "DUPLICATE_PAYMENT"
+                reason = f"Payment record (Bank: {selected_bank_id}, Gateway: {selected_gw_id}) is reused across multiple invoices."
+            elif cand_curr and p["invoice_currency"] and cand_curr.upper() != p["invoice_currency"].upper():
+                exc_type = "CURRENCY_MISMATCH"
+                reason = f"Currency mismatch: Invoice ({p['invoice_currency']}) vs Payment ({cand_curr})."
+            elif is_ambiguous:
+                exc_type = "AMBIGUOUS_MATCH"
+                reason = "Multiple candidate payments yielded identical or close confidence scores."
+            elif selected_bank_id is None and selected_gw_id is None:
+                exc_type = "MISSING_BANK_PAYMENT"
+                reason = "No viable bank or gateway payment candidate was found for this invoice."
+            elif selected_bank_id is None:
+                exc_type = "MISSING_BANK_PAYMENT"
+                reason = "No matching bank statement transaction found for invoice."
+            elif cand_amt > 0 and abs(inv_amt - cand_amt) >= 0.01 and not reportable_gateway_fee:
+                exc_type = "AMOUNT_MISMATCH"
+                reason = f"Amount discrepancy: Invoice (₹{inv_amt}) vs Payment (₹{cand_amt})."
+            elif selected_gw_id is None:
+                exc_type = "MISSING_GATEWAY_PAYMENT"
+                reason = "No matching payment gateway settlement found for invoice."
+            elif reportable_gateway_fee:
+                exc_type = "POSSIBLE_GATEWAY_FEE"
+                reason = f"Gateway net settlement (₹{gw_net}) differs from invoice (₹{inv_amt}) due to ₹{gw_fee} gateway fee."
+            elif cand_amt > 0 and abs(inv_amt - cand_amt) >= 0.01:
+                exc_type = "AMOUNT_MISMATCH"
+                reason = f"Amount discrepancy: Invoice (₹{inv_amt}) vs Payment (₹{cand_amt})."
+            elif "customer_name" in p["mismatched_fields_set"] and (top_b or top_g):
+                exc_type = "CUSTOMER_MISMATCH"
+                reason = f"Weak customer name alignment: '{p['customer_name']}'."
+            elif "reference" in p["mismatched_fields_set"] and (top_b or top_g):
+                exc_type = "REFERENCE_MISMATCH"
+                reason = f"Reference mismatch for invoice '{inv_id}'."
+            elif "date" in p["mismatched_fields_set"] and (top_b or top_g):
+                exc_type = "DATE_OUT_OF_RANGE"
+                reason = f"Payment date is outside allowed proximity tolerance for invoice '{inv_id}'."
+            else:
+                exc_type = "AMOUNT_MISMATCH"
+                reason = f"Reconciliation discrepancy for invoice '{inv_id}'."
+
+            # Calculate metrics for exception record
+            amt_diff = abs(inv_amt - cand_amt) if (cand_amt > 0 and exc_type == "AMOUNT_MISMATCH") else None
+            pct_diff = ((amt_diff / inv_amt) * 100.0) if (amt_diff and inv_amt > 0) else None
+
+            bank_candidate_ids = [b["id"] for b in p["bank_scores"][:2]] if p["bank_scores"] else []
+            gw_candidate_ids = [g["id"] for g in p["gateway_scores"][:2]] if p["gateway_scores"] else []
+
+            exc_record = generate_exception_record(
+                batch_id=batch_id,
+                invoice_id=inv_id,
+                exception_type=exc_type,
+                confidence_score=overall_confidence,
+                reason=reason,
+                bank_ids=bank_candidate_ids,
+                gateway_ids=gw_candidate_ids,
+                amount_diff=amt_diff,
+                pct_diff=pct_diff,
+                gross_amount=gw_gross if is_gateway_fee_case else None,
+                fee=gw_fee if is_gateway_fee_case else None,
+                net_amount=gw_net if is_gateway_fee_case else None
+            )
+
+            exc_id = exc_record["exception_id"]
+            severity = exc_record["severity"]
+            suggested_action = exc_record["suggested_action"]
+
         # Update Counters
         if status == "MATCHED":
             matched_count += 1
@@ -188,33 +402,31 @@ def run_reconciliation_batch(
         else:
             exception_count += 1
 
-        # Format amount float
-        try:
-            inv_amt = float(raw_inv.get("amount", 0.0))
-        except (ValueError, TypeError):
-            inv_amt = 0.0
-
         rec_item = {
             "invoice_id": inv_id,
-            "customer_name": str(raw_inv.get("customer_name", "")),
+            "customer_name": p["customer_name"],
             "invoice_amount": inv_amt,
-            "invoice_date": str(raw_inv.get("invoice_date", "")),
+            "invoice_date": p["invoice_date"],
             "selected_bank_transaction_id": selected_bank_id,
             "selected_gateway_payment_id": selected_gw_id,
-            "bank_score": top_bank_score if selected_bank_id else 0.0,
-            "gateway_score": top_gw_score if selected_gw_id else 0.0,
+            "bank_score": p["top_bank_score"] if selected_bank_id else 0.0,
+            "gateway_score": p["top_gw_score"] if selected_gw_id else 0.0,
             "overall_confidence_score": overall_confidence,
             "status": status,
-            "matched_fields": sorted(list(matched_fields_set)),
-            "mismatched_fields": sorted(list(mismatched_fields_set)),
+            "matched_fields": sorted(list(p["matched_fields_set"])),
+            "mismatched_fields": sorted(list(p["mismatched_fields_set"])),
             "explanation": explanation,
-            "normalized_customer_name": inv_norm.get("customer_name", ""),
-            "fuzzy_customer_score": fuzzy_cust_score,
-            "description_similarity": desc_similarity,
-            "best_candidate_score": best_candidate_score,
-            "second_best_candidate_score": second_best_candidate_score,
-            "candidate_score_gap": candidate_score_gap,
-            "matching_method": matching_method
+            "normalized_customer_name": p["inv_norm"].get("customer_name", ""),
+            "fuzzy_customer_score": p["fuzzy_cust_score"],
+            "description_similarity": p["desc_similarity"],
+            "best_candidate_score": p["best_candidate_score"],
+            "second_best_candidate_score": p["second_best_candidate_score"],
+            "candidate_score_gap": p["candidate_score_gap"],
+            "matching_method": matching_method,
+            "exception_id": exc_id,
+            "exception_type": exc_type,
+            "severity": severity,
+            "suggested_action": suggested_action
         }
         results.append(rec_item)
 

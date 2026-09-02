@@ -54,4 +54,35 @@ class ReconciliationResultItem(BaseModel):
     second_best_candidate_score: float = 0.0
     candidate_score_gap: float = 0.0
     matching_method: str = "NO_MATCH"
+    exception_id: Optional[str] = None
+    exception_type: Optional[str] = None
+    severity: Optional[str] = None
+    suggested_action: Optional[str] = None
+
+
+class ExceptionRecord(BaseModel):
+    exception_id: str
+    batch_id: str
+    invoice_id: str
+    exception_type: str
+    severity: str
+    confidence_score: float
+    reason: str
+    suggested_action: str
+    candidate_bank_transaction_ids: list[str]
+    candidate_gateway_payment_ids: list[str]
+    amount_difference: Optional[float] = None
+    percentage_difference: Optional[float] = None
+    gross_amount: Optional[float] = None
+    fee: Optional[float] = None
+    net_amount: Optional[float] = None
+    created_at: str
+    status: str
+
+
+class ExceptionSummaryResponse(BaseModel):
+    total: int
+    open: int
+    by_severity: dict[str, int]
+    by_type: dict[str, int]
 

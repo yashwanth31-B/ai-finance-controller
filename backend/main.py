@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routes import health, demo_data, reconciliation
+from routes import health, demo_data, reconciliation, exceptions
 from schemas import RootInfoResponse
 
 # Initialize database tables
@@ -51,6 +51,7 @@ def read_root():
 app.include_router(health.router)
 app.include_router(demo_data.router)
 app.include_router(reconciliation.router)
+app.include_router(exceptions.router)
 
 if __name__ == "__main__":
     import uvicorn
