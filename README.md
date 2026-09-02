@@ -1,6 +1,6 @@
 # AI Finance Controller — Multi-Source Reconciliation
 
-[![Status](https://img.shields.io/badge/Status-Phase%2013%20Completed-emerald.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
+[![Status](https://img.shields.io/badge/Status-Phase%2014%20Completed-emerald.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 [![Tests](https://img.shields.io/badge/Tests-86%2F86%20Passed-blue.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 [![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 
@@ -11,6 +11,14 @@ An enterprise-grade, high-throughput multi-source financial reconciliation platf
 3. **Payment Processor Gateways** (Razorpay, Stripe payment settlement logs)
 
 The platform processes batches of **50+ to 500+ records** per execution run, computes real-time operational metrics (**Match Rate**, **Verified Ground Truth Accuracy**, **Engine Throughput**, **Unresolved Discrepancy Exceptions**), provides **AI-Assisted Exception Diagnosis**, and maintains an **Immutable Compliance Audit Trail**.
+
+---
+
+## 🌐 Live Production Demo URLs
+
+- **Frontend Live Demo**: `<deployment URL>` *(Deploy to Vercel)*
+- **Backend API Base**: `<deployment URL>` *(Deploy to Render / Railway)*
+- **Public Health Check**: `<backend URL>/api/health`
 
 ---
 
@@ -117,6 +125,41 @@ Invoice CSV                 Bank CSV                 Gateway CSV
 
 ---
 
+## 🚀 Production Deployment Guide
+
+### 1. Frontend Deployment (Vercel)
+1. Push your repository to GitHub.
+2. Go to [Vercel Dashboard](https://vercel.com/new) and click **Add New Project**.
+3. Import `ai-finance-controller`.
+4. Set **Root Directory** to `frontend`.
+5. Build Settings:
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+6. Environment Variables:
+   - `VITE_API_BASE_URL` = `https://your-backend-api.onrender.com` (Your deployed FastAPI URL)
+7. Click **Deploy**. Vercel will automatically use `frontend/vercel.json` for single-page application routing.
+
+### 2. Backend Deployment (Render / Railway)
+1. Go to [Render Dashboard](https://dashboard.render.com/) and create a **New Web Service**.
+2. Connect your GitHub repository.
+3. Service Settings:
+   - **Environment**: Python 3
+   - **Root Directory**: `backend` (or root if using backend path)
+   - **Build Command**: `pip install -r backend/requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Environment Variables:
+   - `ALLOWED_ORIGINS` = `https://your-frontend.vercel.app`
+   - `AI_PROVIDER` = `google` *(Optional)*
+   - `AI_API_KEY` = `your_gemini_api_key` *(Optional — defaults to Heuristic AI Engine if blank)*
+   - `AI_MODEL` = `gemini-1.5-flash` *(Optional)*
+5. Click **Deploy Web Service**.
+
+> [!NOTE]
+> **Ephemeral Cloud Storage Disclosure**: On free cloud hosting tiers (like Render or Railway), user-uploaded CSV batches (`data/uploads/`) are stored on ephemeral disk space and reset upon container restart. The version-controlled synthetic demo dataset (`data/*.csv`) remains permanently available across all restarts.
+
+---
+
 ## ⏱️ Presentation & Hackathon Guides
 
 - 📘 [**5-Minute Demo Script**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_SCRIPT.md) — Timed presentation script for hackathon judges.
@@ -192,7 +235,7 @@ AI_MODEL=gemini-1.5-flash
 # Backend Configuration
 PORT=8000
 HOST=0.0.0.0
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,https://your-vercel-app.vercel.app
 
 # Frontend Configuration
 VITE_API_BASE_URL=http://localhost:8000
