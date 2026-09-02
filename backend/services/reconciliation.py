@@ -1,20 +1,20 @@
 """
 Multi-Source 3-Way Reconciliation Engine
 ========================================
-Runs deterministic matching across Invoice, Bank Transaction, and Payment Gateway records.
+Runs deterministic & fuzzy matching across Invoice, Bank Transaction, and Payment Gateway records.
 
 Classification Thresholds:
 - 90 to 100: MATCHED
 - 70 to 89: REVIEW
 - Below 70: EXCEPTION
-- Ambiguous top candidates: REVIEW (with reason "Multiple possible matches")
+- Ambiguous top candidates: REVIEW (with reason "AMBIGUOUS_CANDIDATES" / "Multiple possible matches")
 """
 
 import os
 import csv
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from services.normalization import normalize_record
 from services.scoring import score_candidate
 
@@ -42,8 +42,8 @@ def run_reconciliation_batch(
     Executes 3-way reconciliation on provided raw records batches.
     
     1. Normalizes all records in memory
-    2. Searches best candidates for Bank and Gateway
-    3. Calculates deterministic confidence scores
+    2. Searches best candidates for Bank and Gateway using RapidFuzz matching
+    3. Calculates deterministic & fuzzy confidence scores
     4. Detects ambiguity and classifies results into MATCHED / REVIEW / EXCEPTION
     """
     start_time = time.time()
@@ -69,7 +69,7 @@ def run_reconciliation_batch(
         for b_item in norm_bank:
             raw_b = b_item["original"]
             b_norm = b_item["normalized"]
-            score_res = score_candidate(inv_norm, b_norm)
+            score_res = score_candidate(inv_norm, b_norm, raw_b)
             bank_scores.append({
                 "raw": raw_b,
                 "score_res": score_res,
@@ -84,7 +84,7 @@ def run_reconciliation_batch(
         for g_item in norm_gateway:
             raw_g = g_item["original"]
             g_norm = g_item["normalized"]
-            score_res = score_candidate(inv_norm, g_norm)
+            score_res = score_candidate(inv_norm, g_norm, raw_g)
             gateway_scores.append({
                 "raw": raw_g,
                 "score_res": score_res,
@@ -96,24 +96,36 @@ def run_reconciliation_batch(
 
         # Select top Bank candidate
         top_bank = bank_scores[0] if bank_scores else None
+        second_bank = bank_scores[1] if len(bank_scores) >= 2 else None
         top_bank_score = top_bank["score"] if top_bank else 0.0
+        second_bank_score = second_bank["score"] if second_bank else 0.0
         selected_bank_id = top_bank["id"] if (top_bank and top_bank_score >= 40.0) else None
 
         # Select top Gateway candidate
         top_gw = gateway_scores[0] if gateway_scores else None
+        second_gw = gateway_scores[1] if len(gateway_scores) >= 2 else None
         top_gw_score = top_gw["score"] if top_gw else 0.0
+        second_gw_score = second_gw["score"] if second_gw else 0.0
         selected_gw_id = top_gw["id"] if (top_gw and top_gw_score >= 40.0) else None
 
-        # Ambiguity Check: equal or near-identical top candidate scores
+        # Candidate ranking metrics
+        best_candidate_score = max(top_bank_score, top_gw_score)
+        second_best_candidate_score = max(
+            second_bank_score if top_bank_score >= top_gw_score else top_bank_score,
+            second_gw_score if top_gw_score >= top_bank_score else top_gw_score
+        )
+        candidate_score_gap = round(best_candidate_score - second_best_candidate_score, 2)
+
+        # Ambiguity Check: difference < 5 pts and both candidates above review threshold (>= 70)
         is_bank_ambiguous = (
             len(bank_scores) >= 2 and
             bank_scores[0]["score"] >= 60.0 and
-            (bank_scores[0]["score"] - bank_scores[1]["score"]) <= 5.0
+            (bank_scores[0]["score"] - bank_scores[1]["score"]) < 5.0
         )
         is_gw_ambiguous = (
             len(gateway_scores) >= 2 and
             gateway_scores[0]["score"] >= 60.0 and
-            (gateway_scores[0]["score"] - gateway_scores[1]["score"]) <= 5.0
+            (gateway_scores[0]["score"] - gateway_scores[1]["score"]) < 5.0
         )
         is_ambiguous = is_bank_ambiguous or is_gw_ambiguous
 
@@ -126,6 +138,12 @@ def run_reconciliation_batch(
             overall_confidence = top_gw_score
         else:
             overall_confidence = 0.0
+
+        # Extract fuzzy metrics from top candidate
+        top_cand_res = top_bank["score_res"] if (top_bank and top_bank_score >= top_gw_score) else (top_gw["score_res"] if top_gw else {})
+        fuzzy_cust_score = top_cand_res.get("fuzzy_customer_score", 0.0)
+        desc_similarity = top_cand_res.get("description_similarity", 0.0)
+        cand_matching_method = top_cand_res.get("matching_method", "NO_MATCH")
 
         # Combine Matched and Mismatched Fields
         matched_fields_set = set()
@@ -144,18 +162,22 @@ def run_reconciliation_batch(
 
         mismatched_fields_set.difference_update(matched_fields_set)
 
-        # Determine Classification & Explanation
+        # Determine Classification & Matching Method
         if is_ambiguous:
             status = "REVIEW"
-            explanation = "Multiple possible matches identified with identical or close confidence scores."
+            matching_method = "AMBIGUOUS"
+            explanation = "Multiple possible matches identified with identical or close confidence scores (AMBIGUOUS_CANDIDATES)."
         elif overall_confidence >= 90.0:
             status = "MATCHED"
-            explanation = "High-confidence exact multi-source match verified across records."
+            matching_method = cand_matching_method
+            explanation = f"High-confidence match verified across records using {matching_method} matching."
         elif overall_confidence >= 70.0:
             status = "REVIEW"
+            matching_method = cand_matching_method if cand_matching_method != "NO_MATCH" else "FUZZY"
             explanation = f"Moderate confidence match (score {overall_confidence}). Manual review required."
         else:
             status = "EXCEPTION"
+            matching_method = "NO_MATCH"
             explanation = f"Low confidence match (score {overall_confidence}) or missing payment records."
 
         # Update Counters
@@ -185,7 +207,14 @@ def run_reconciliation_batch(
             "status": status,
             "matched_fields": sorted(list(matched_fields_set)),
             "mismatched_fields": sorted(list(mismatched_fields_set)),
-            "explanation": explanation
+            "explanation": explanation,
+            "normalized_customer_name": inv_norm.get("customer_name", ""),
+            "fuzzy_customer_score": fuzzy_cust_score,
+            "description_similarity": desc_similarity,
+            "best_candidate_score": best_candidate_score,
+            "second_best_candidate_score": second_best_candidate_score,
+            "candidate_score_gap": candidate_score_gap,
+            "matching_method": matching_method
         }
         results.append(rec_item)
 

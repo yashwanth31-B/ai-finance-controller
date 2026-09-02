@@ -1,20 +1,33 @@
 """
-Deterministic Candidate Scoring Engine
-=======================================
+Deterministic & Fuzzy Candidate Scoring Engine
+===============================================
 Computes a match score (0 to 100 points) between a normalized invoice and a candidate record
-(Bank transaction or Payment Gateway payment) based on exact normalized field criteria.
+(Bank transaction or Payment Gateway payment) combining exact normalized criteria and RapidFuzz fuzzy matching.
 
 Scoring Rules:
 - Amount match: 40 points (exact normalized amount match)
-- Customer Name match: 20 points (exact normalized company name match)
-- Reference match: 20 points (exact normalized reference ID match)
+- Customer Name match: 20 points max
+  - Exact normalized match: 20 pts
+  - Fuzzy score 90 - 100: 18 pts
+  - Fuzzy score 80 - 89: 15 pts
+  - Fuzzy score 70 - 79: 10 pts
+  - Below 70: 0 pts
+- Reference match: 20 points max
+  - Exact normalized match: 20 pts
+  - Conservative fuzzy match (score >= 90): 15 pts
+  - Below 90: 0 pts
 - Date proximity: 15 points (0 days = 15, 1 day = 13, 2 days = 10, 3 days = 7, >3 days = 0)
 - Currency match: 5 points (exact normalized 3-letter currency code match)
 Total: 100 points max
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
+from services.fuzzy_matching import (
+    fuzzy_company_name_similarity,
+    fuzzy_description_similarity,
+    fuzzy_reference_similarity
+)
 
 
 def calculate_date_difference(date_str1: str, date_str2: str) -> int:
@@ -29,13 +42,14 @@ def calculate_date_difference(date_str1: str, date_str2: str) -> int:
         return 999
 
 
-def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any]) -> Dict[str, Any]:
+def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any], raw_candidate: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    Computes candidate match score against an invoice using normalized fields.
-    Returns score breakdown, total score (0 to 100), matched fields, and mismatched fields.
+    Computes candidate match score against an invoice using normalized fields and RapidFuzz matching.
+    Returns detailed score breakdown, total score (0 to 100), matched/mismatched fields, and matching method.
     """
     matched_fields: List[str] = []
     mismatched_fields: List[str] = []
+    used_fuzzy = False
 
     # 1. Amount Match (40 pts)
     inv_amount = invoice_norm.get("amount")
@@ -48,29 +62,58 @@ def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any]
     else:
         mismatched_fields.append("amount")
 
-    # 2. Customer Name Match (20 pts)
+    # 2. Customer Name Match (20 pts max)
     inv_name = invoice_norm.get("customer_name", "")
     cand_name = candidate_norm.get("customer_name", "")
+    cand_desc = str(raw_candidate.get("description", "")) if raw_candidate else ""
+
+    fuzzy_customer_score = fuzzy_company_name_similarity(inv_name, cand_name)
+    desc_similarity = fuzzy_description_similarity(inv_name, cand_desc) if cand_desc else 0.0
+
+    best_name_sim = max(fuzzy_customer_score, desc_similarity)
     customer_score = 0.0
 
     if inv_name and cand_name and inv_name == cand_name:
         customer_score = 20.0
+        fuzzy_customer_score = 100.0
+        matched_fields.append("customer_name")
+    elif best_name_sim >= 90.0:
+        customer_score = 18.0
+        used_fuzzy = True
+        matched_fields.append("customer_name")
+    elif best_name_sim >= 80.0:
+        customer_score = 15.0
+        used_fuzzy = True
+        matched_fields.append("customer_name")
+    elif best_name_sim >= 70.0:
+        customer_score = 10.0
+        used_fuzzy = True
         matched_fields.append("customer_name")
     else:
         mismatched_fields.append("customer_name")
 
-    # 3. Reference Match (20 pts)
+    # 3. Reference Match (20 pts max)
     inv_ref = invoice_norm.get("reference", "")
     cand_ref = candidate_norm.get("reference", "")
     ref_score = 0.0
 
-    if inv_ref and cand_ref and inv_ref == cand_ref:
-        ref_score = 20.0
-        matched_fields.append("reference")
+    fuzzy_ref_score = 0.0
+    if inv_ref and cand_ref:
+        if inv_ref == cand_ref:
+            ref_score = 20.0
+            matched_fields.append("reference")
+        else:
+            fuzzy_ref_score = fuzzy_reference_similarity(inv_ref, cand_ref)
+            if fuzzy_ref_score >= 90.0:
+                ref_score = 15.0
+                used_fuzzy = True
+                matched_fields.append("reference")
+            else:
+                mismatched_fields.append("reference")
     else:
         mismatched_fields.append("reference")
 
-    # 4. Date Proximity Match (15 pts)
+    # 4. Date Proximity Match (15 pts max)
     inv_date = invoice_norm.get("date")
     cand_date = candidate_norm.get("date")
     date_diff = calculate_date_difference(inv_date, cand_date)
@@ -104,13 +147,26 @@ def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any]
 
     total_score = amount_score + customer_score + ref_score + date_score + currency_score
 
+    # Determine Matching Method
+    if total_score < 40.0:
+        matching_method = "NO_MATCH"
+    elif not used_fuzzy and total_score == 100.0:
+        matching_method = "EXACT"
+    elif not used_fuzzy:
+        matching_method = "NORMALIZED"
+    else:
+        matching_method = "FUZZY"
+
     return {
         "total_score": round(total_score, 2),
         "amount_score": amount_score,
         "customer_name_score": customer_score,
+        "fuzzy_customer_score": fuzzy_customer_score,
+        "description_similarity": desc_similarity,
         "reference_score": ref_score,
         "date_score": date_score,
         "currency_score": currency_score,
         "matched_fields": matched_fields,
-        "mismatched_fields": mismatched_fields
+        "mismatched_fields": mismatched_fields,
+        "matching_method": matching_method
     }

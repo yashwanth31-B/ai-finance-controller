@@ -47,4 +47,11 @@ class ReconciliationResultItem(BaseModel):
     matched_fields: list[str]
     mismatched_fields: list[str]
     explanation: str
+    normalized_customer_name: Optional[str] = None
+    fuzzy_customer_score: float = 0.0
+    description_similarity: float = 0.0
+    best_candidate_score: float = 0.0
+    second_best_candidate_score: float = 0.0
+    candidate_score_gap: float = 0.0
+    matching_method: str = "NO_MATCH"
 
