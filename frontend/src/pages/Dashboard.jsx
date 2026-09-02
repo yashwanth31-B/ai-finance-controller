@@ -215,8 +215,16 @@ export const Dashboard = () => {
           />
           <StatCard
             title="Verified Accuracy"
-            value={`${metrics.verified_accuracy?.toFixed(2)}%`}
-            subtitle="Ground truth verified accuracy"
+            value={
+              metrics.ground_truth_available && metrics.verified_accuracy !== null
+                ? `${metrics.verified_accuracy?.toFixed(2)}%`
+                : 'N/A'
+            }
+            subtitle={
+              metrics.ground_truth_available
+                ? 'Ground truth verified accuracy'
+                : 'Ground truth is not available for uploaded data.'
+            }
             icon={Award}
             accentColor="emerald"
           />

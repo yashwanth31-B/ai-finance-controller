@@ -4,7 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,11 +38,35 @@ export const getMetrics = async () => {
 };
 
 /**
- * Trigger batch multi-source 3-way reconciliation run.
+ * Trigger batch multi-source 3-way reconciliation run on demo synthetic dataset.
  * POST /api/reconciliation/run
  */
 export const runReconciliation = async () => {
   const response = await apiClient.post('/api/reconciliation/run');
+  return response.data;
+};
+
+/**
+ * Validate 3 uploaded CSV files (invoices, bank, gateway).
+ * POST /api/upload/validate
+ */
+export const validateUploadFiles = async (formData) => {
+  const response = await apiClient.post('/api/upload/validate', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
+/**
+ * Trigger 3-way reconciliation run on validated uploaded CSV batch.
+ * POST /api/reconciliation/run-uploaded
+ */
+export const runUploadedReconciliation = async (uploadBatchId) => {
+  const response = await apiClient.post('/api/reconciliation/run-uploaded', {
+    upload_batch_id: uploadBatchId,
+  });
   return response.data;
 };
 

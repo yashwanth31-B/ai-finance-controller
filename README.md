@@ -14,9 +14,9 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 8 (Professional Frontend Dashboard)
+## Current Status: Phase 9 (CSV Upload, Validation & Reconciliation Run Flow)
 
-This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7 & Phase 8**:
+This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8 & Phase 9**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
 - Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
 - Reusable in-memory data normalization service (`backend/services/normalization.py`).
@@ -25,9 +25,11 @@ This repository contains **Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6,
 - Multi-source 3-way reconciliation engine with ambiguity guardrails (`backend/services/reconciliation.py`).
 - Dedicated exception detection & classification layer (`backend/services/exceptions.py`).
 - Batch metrics & ground truth verification accuracy service (`backend/services/metrics.py`).
-- Backend API endpoints (`GET /api/metrics`, `POST /api/reconciliation/run`, `GET /api/reconciliation/results`, `GET /api/exceptions`).
-- Comprehensive Pytest suite with **55 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, metrics computation, and API endpoints.
-- Professional React + Vite frontend dashboard with Tailwind CSS, Recharts analytics, live search/filters/pagination, and 3-way record inspection detail modals.
+- Secure CSV upload validation and preview service (`backend/services/upload.py`).
+- Backend API endpoints (`POST /api/upload/validate`, `POST /api/reconciliation/run-uploaded`, `GET /api/metrics`, `GET /api/reconciliation/results`, `GET /api/exceptions`).
+- Comprehensive Pytest suite with **70 unit tests** verifying health checks, dataset integrity, seed reproducibility, normalization, fuzzy matching, scoring rules, ambiguity gap detection, exception classification, metrics computation, CSV security validation, upload sessions, and API endpoints.
+- Professional React + Vite frontend dashboard with 3 drag-and-drop CSV upload cards, validation error badges, 10-row preview tabs, stage indicators, Recharts analytics, search/filters/pagination, and 3-way record inspection detail modals.
+
 
 
 ---
@@ -326,22 +328,37 @@ The frontend application (`frontend/`) is built with **React**, **React Router**
 
 ---
 
-## Frontend Routes
+## CSV Upload Workflow
 
-| Route | Page | Description |
-| :--- | :--- | :--- |
-| `/` | **Dashboard** | Executive overview, live KPI cards, Recharts status & exception analytics, scenario benchmarks |
-| `/reconciliation` | **Reconciliation** | Interactive 3-way reconciliation results table with search, filters, pagination & detail modal |
-| `/exceptions` | **Exceptions** | Discrepancy management workbench with severity filtering, suggested actions & detail modal |
-| `/upload` | **Data Ingestion** | Multi-source batch ingestion dropzones (50+ records) |
-| `/history` | **Run History** | Historical audit trail of batch reconciliation executions |
-| `/reports` | **Reports** | Exportable financial audit reports & PDF analytics |
-| `/settings` | **Settings** | Matching tolerances, rule thresholds, and API connection status |
+Users can upload custom multi-source financial CSV datasets at `/upload`.
+
+### Workflow Stages
+
+1. **Upload Invoice Data**:
+   - Drag-and-drop or select Invoice CSV containing `invoice_id`, `customer_name`, `amount`, `currency`, `invoice_date`, `reference`.
+2. **Upload Bank Data**:
+   - Drag-and-drop or select Bank Statement CSV containing `transaction_id`, `description`, `amount`, `currency`, `transaction_date`, `reference`.
+3. **Upload Gateway Data**:
+   - Drag-and-drop or select Gateway Settlement CSV containing `payment_id`, `customer_name`, `amount`, `currency`, `payment_date`, `reference`.
+4. **Validate**:
+   - Click **Validate CSV Files** (`POST /api/upload/validate`).
+   - Validates `.csv` extension, 10 MB size limit, required headers, non-empty IDs, valid date/amount formats, and checks for duplicate primary IDs.
+5. **Preview**:
+   - View preview tabs displaying the first 10 rows per file (`120 total rows — displaying first 10`).
+6. **Run Reconciliation**:
+   - Click **Run Reconciliation** (`POST /api/reconciliation/run-uploaded`).
+   - Normalizes uploaded records, executes 3-way matching, and classifies exceptions.
+7. **Review Matches & Exceptions**:
+   - Click **View Reconciliation Results** to navigate to `/reconciliation` and inspect matched records, scores, and active discrepancy exceptions.
+
+> [!NOTE]
+> **Ground Truth & Verified Accuracy**: Real user uploads typically do not include a ground truth benchmark (`ground_truth.csv`). Therefore, for uploaded data, `verified_accuracy` returns `null` (`N/A` on Dashboard), while match rate, review rate, exception count, confidence, and throughput remain fully calculated.
 
 ---
 
 ## Upcoming Phases
 
-- **Phase 9: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
-- **Phase 10: Human-in-the-Loop Review Workflow**: Manual override, exception resolution tracking, audit comment trails, and approval queues.
+- **Phase 10: LLM/AI Exception Assistant**: AI-powered root-cause analysis for unresolved exceptions, natural-language explanations, and suggested corrective actions.
+- **Phase 11: Human-in-the-Loop Review Workflow**: Manual override, exception resolution tracking, audit comment trails, and approval queues.
+
 

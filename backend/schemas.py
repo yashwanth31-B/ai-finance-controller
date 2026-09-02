@@ -1,6 +1,8 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any, Dict, List
 from datetime import datetime
+
+
 
 class RootInfoResponse(BaseModel):
     name: str
@@ -100,11 +102,31 @@ class MetricsResponse(BaseModel):
     needs_review: int
     exceptions: int
     match_rate: float
-    verified_accuracy: float
+    verified_accuracy: Optional[float] = None
+    ground_truth_available: bool = True
     throughput: float
     average_confidence: float
     reconciliation_status: dict[str, int]
     exception_breakdown: dict[str, int]
     scenario_performance: list[ScenarioPerformanceItem]
+
+
+class FileValidationResult(BaseModel):
+    filename: str
+    rows: int
+    valid: bool
+    errors: list[str]
+    preview: list[dict[str, Any]] = []
+
+
+class UploadValidationResponse(BaseModel):
+    valid: bool
+    upload_batch_id: Optional[str] = None
+    files: dict[str, FileValidationResult]
+
+
+class RunUploadedRequest(BaseModel):
+    upload_batch_id: str
+
 
 

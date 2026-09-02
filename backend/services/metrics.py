@@ -109,57 +109,61 @@ def compute_metrics() -> Dict[str, Any]:
 
     # Ground truth evaluation & scenario performance
     gt_map = load_ground_truth()
-    total_correct = 0
-    scenario_stats: Dict[str, Dict[str, int]] = {}
+    matched_gt_count = sum(1 for r in results if r.get("invoice_id") in gt_map)
+    ground_truth_available = (len(gt_map) > 0 and matched_gt_count >= (len(results) * 0.5))
 
-    for r in results:
-        inv_id = r.get("invoice_id")
-        gt = gt_map.get(inv_id)
-        if not gt:
-            continue
-
-        scen = gt.get("scenario_type") or "default_scenario"
-        if scen not in scenario_stats:
-            scenario_stats[scen] = {"total": 0, "correct": 0}
-
-        scenario_stats[scen]["total"] += 1
-
-        exp_bank = gt.get("expected_bank_transaction_id", "")
-        exp_gw = gt.get("expected_gateway_payment_id", "")
-        exp_status = gt.get("expected_status", "")
-
-        act_bank = r.get("selected_bank_transaction_id") or ""
-        act_gw = r.get("selected_gateway_payment_id") or ""
-        act_status = r.get("status") or ""
-
-        # Match check against ground truth
-        bank_correct = (exp_bank == "" and act_bank == "") or (exp_bank != "" and exp_bank == act_bank)
-        gw_correct = (exp_gw == "" and act_gw == "") or (exp_gw != "" and exp_gw == act_gw)
-        status_correct = (exp_status == act_status) or (exp_status in ("REVIEW", "EXCEPTION") and act_status in ("REVIEW", "EXCEPTION"))
-
-        if bank_correct and gw_correct and status_correct:
-            total_correct += 1
-            scenario_stats[scen]["correct"] += 1
-
-    evaluable_total = len(gt_map) if gt_map else total_records
-    verified_accuracy = round((total_correct / evaluable_total) * 100.0, 2) if evaluable_total > 0 else match_rate
-
+    verified_accuracy = None
     scenario_performance = []
-    for scen_name, stats in scenario_stats.items():
-        tot = stats["total"]
-        corr = stats["correct"]
-        acc = round((corr / tot) * 100.0, 2) if tot > 0 else 0.0
-        # Format scenario label cleanly
-        formatted_name = scen_name.replace("_", " ").title()
-        scenario_performance.append({
-            "scenario_name": formatted_name,
-            "total_records": tot,
-            "correct_results": corr,
-            "accuracy": acc
-        })
 
-    # Sort scenarios alphabetically
-    scenario_performance.sort(key=lambda x: x["scenario_name"])
+    if ground_truth_available:
+        total_correct = 0
+        scenario_stats: Dict[str, Dict[str, int]] = {}
+
+        for r in results:
+            inv_id = r.get("invoice_id")
+            gt = gt_map.get(inv_id)
+            if not gt:
+                continue
+
+            scen = gt.get("scenario_type") or "default_scenario"
+            if scen not in scenario_stats:
+                scenario_stats[scen] = {"total": 0, "correct": 0}
+
+            scenario_stats[scen]["total"] += 1
+
+            exp_bank = gt.get("expected_bank_transaction_id", "")
+            exp_gw = gt.get("expected_gateway_payment_id", "")
+            exp_status = gt.get("expected_status", "")
+
+            act_bank = r.get("selected_bank_transaction_id") or ""
+            act_gw = r.get("selected_gateway_payment_id") or ""
+            act_status = r.get("status") or ""
+
+            # Match check against ground truth
+            bank_correct = (exp_bank == "" and act_bank == "") or (exp_bank != "" and exp_bank == act_bank)
+            gw_correct = (exp_gw == "" and act_gw == "") or (exp_gw != "" and exp_gw == act_gw)
+            status_correct = (exp_status == act_status) or (exp_status in ("REVIEW", "EXCEPTION") and act_status in ("REVIEW", "EXCEPTION"))
+
+            if bank_correct and gw_correct and status_correct:
+                total_correct += 1
+                scenario_stats[scen]["correct"] += 1
+
+        evaluable_total = len(results)
+        verified_accuracy = round((total_correct / evaluable_total) * 100.0, 2) if evaluable_total > 0 else 0.0
+
+        for scen_name, stats in scenario_stats.items():
+            tot = stats["total"]
+            corr = stats["correct"]
+            acc = round((corr / tot) * 100.0, 2) if tot > 0 else 0.0
+            formatted_name = scen_name.replace("_", " ").title()
+            scenario_performance.append({
+                "scenario_name": formatted_name,
+                "total_records": tot,
+                "correct_results": corr,
+                "accuracy": acc
+            })
+
+        scenario_performance.sort(key=lambda x: x["scenario_name"])
 
     return {
         "total_records": total_records,
@@ -168,6 +172,7 @@ def compute_metrics() -> Dict[str, Any]:
         "exceptions": exception_count,
         "match_rate": match_rate,
         "verified_accuracy": verified_accuracy,
+        "ground_truth_available": ground_truth_available,
         "throughput": throughput,
         "average_confidence": avg_confidence,
         "reconciliation_status": {
@@ -178,3 +183,4 @@ def compute_metrics() -> Dict[str, Any]:
         "exception_breakdown": exception_breakdown,
         "scenario_performance": scenario_performance
     }
+

@@ -33,6 +33,8 @@ def test_metrics_api_endpoint():
 
     assert isinstance(data["total_records"], int)
     assert isinstance(data["match_rate"], float)
-    assert isinstance(data["verified_accuracy"], float)
+    assert data["verified_accuracy"] is None or isinstance(data["verified_accuracy"], float)
+    assert "ground_truth_available" in data
+
     assert isinstance(data["throughput"], float)
     assert isinstance(data["scenario_performance"], list)
