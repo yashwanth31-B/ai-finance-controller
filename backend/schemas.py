@@ -22,3 +22,29 @@ class DemoDataStatsResponse(BaseModel):
     gateway_records: int
     ground_truth_records: int
 
+
+class ReconciliationRunResponse(BaseModel):
+    batch_id: str
+    total_records: int
+    matched: int
+    review: int
+    exceptions: int
+    processing_time_seconds: float
+    results_available: bool
+
+
+class ReconciliationResultItem(BaseModel):
+    invoice_id: str
+    customer_name: str
+    invoice_amount: float
+    invoice_date: str
+    selected_bank_transaction_id: Optional[str] = None
+    selected_gateway_payment_id: Optional[str] = None
+    bank_score: float
+    gateway_score: float
+    overall_confidence_score: float
+    status: str
+    matched_fields: list[str]
+    mismatched_fields: list[str]
+    explanation: str
+

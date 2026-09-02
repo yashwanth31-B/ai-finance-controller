@@ -14,14 +14,16 @@ The system processes batches of **50+ records** and computes real-time operation
 
 ---
 
-## Current Status: Phase 3 (Data Normalization Layer)
+## Current Status: Phase 4 (Basic Multi-Source Reconciliation Engine)
 
-This repository contains **Phase 1, Phase 2 & Phase 3**:
+This repository contains **Phase 1, Phase 2, Phase 3 & Phase 4**:
 - Clean modular backend architecture with FastAPI, SQLAlchemy 2.0, SQLite, and Pydantic.
 - Reproducible multi-source financial dataset generator (`backend/scripts/generate_data.py`).
 - Reusable in-memory data normalization service (`backend/services/normalization.py`).
-- Dynamic dataset statistics endpoint (`GET /api/demo-data/stats`).
-- Comprehensive Pytest suite covering health checks, dataset integrity, seed reproducibility, and normalization logic.
+- Deterministic candidate scoring engine (`backend/services/scoring.py`).
+- Multi-source 3-way reconciliation engine (`backend/services/reconciliation.py`).
+- Complete reconciliation API endpoints (`POST /api/reconciliation/run`, `GET /api/reconciliation/results`, `GET /api/reconciliation/results/{invoice_id}`).
+- Pytest suite with 29 unit tests verifying health checks, dataset integrity, seed reproducibility, normalization, scoring rules, ambiguity protection, and API endpoints.
 - Modern React + Vite frontend dashboard shell with Tailwind CSS and React Router.
 
 ---
@@ -55,6 +57,32 @@ In real-world financial operations, multi-source records (ERP invoices, bank fee
 - **Monetary Formatting**: Raw feeds format amounts as strings with currency symbols or commas (`₹12,500.00`, `12,500`). Amount normalization cleans string values into exact float numbers (`12500.0`).
 - **Heterogeneous Date Formats**: Bank statements and payment processors export dates in varying regional formats (`01-08-2026`, `2026-08-01`, `01/08/2026`). Normalization casts valid dates into standardized ISO strings (`2026-08-01`).
 - **Preservation of Raw Data**: Normalization generates separate normalized structures without mutating or overwriting original raw CSV fields, ensuring raw data remains available for auditability and manual review.
+
+---
+
+## Reconciliation Engine
+
+The reconciliation engine ([`backend/services/reconciliation.py`](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/backend/services/reconciliation.py) & [`backend/services/scoring.py`](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/backend/services/scoring.py)) performs deterministic candidate search and 3-way matching across normalized Invoice, Bank Transaction, and Payment Gateway records.
+
+### Candidate Search & Scoring Rules (0 to 100 points)
+For every invoice, candidate bank and gateway records are scored against deterministic matching rules:
+
+| Field | Max Score | Condition |
+| :--- | :---: | :--- |
+| **Amount Match** | **40 pts** | 40 pts for exact normalized monetary match (`abs(diff) < 0.001`); 0 pts otherwise. |
+| **Customer Name Match** | **20 pts** | 20 pts for exact normalized company name match; 0 pts otherwise. |
+| **Reference Match** | **20 pts** | 20 pts for exact normalized reference ID match; 0 pts otherwise. |
+| **Date Proximity** | **15 pts** | 15 pts (0 days diff), 13 pts (1 day diff), 10 pts (2 days diff), 7 pts (3 days diff), 0 pts (> 3 days). |
+| **Currency Match** | **5 pts** | 5 pts for identical 3-letter ISO currency code; 0 pts otherwise. |
+
+### Classification Thresholds
+Based on calculated overall confidence scores, records are classified into operational buckets:
+* **`MATCHED` (90 – 100 pts)**: High-confidence exact multi-source match automatically verified.
+* **`REVIEW` (70 – 89 pts)**: Moderate-confidence match or ambiguous candidate match requiring human review.
+* **`EXCEPTION` (< 70 pts)**: Low-confidence match, amount/currency mismatch, or missing payment feeds requiring discrepancy investigation.
+
+### Why Low-Confidence Transactions Are Not Forced into Matches
+Financial reconciliation systems must prioritize **correctness over aggressive matching**. Forcing low-confidence transactions (< 70 pts) or ambiguous records (multiple top candidates with equal/close scores) into false matches creates downstream ledger corruption, accounting misstatements, and audit failures. The engine safety guardrail flags ambiguous or low-confidence records for `REVIEW` or `EXCEPTION` with explicit explanations (e.g. `"Multiple possible matches identified"`), routing them safely to resolution workbenches.
 
 ---
 

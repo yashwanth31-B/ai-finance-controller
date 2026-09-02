@@ -19,6 +19,13 @@ LEGAL_SUFFIXES = {
     "pvtltd"
 }
 
+# Transaction description noise tokens commonly found in bank feeds
+TRANSACTION_NOISE_WORDS = {
+    "payment", "neft", "rtgs", "cr", "dr", "upi", "settlement",
+    "inward", "forex", "remittance", "transfer", "imps", "fd",
+    "val", "nps", "nach", "cms", "fund", "funds"
+}
+
 # Synonyms for standardizing core word variations
 WORD_SYNONYMS = {
     "enterprise": "enterprises",
@@ -37,6 +44,7 @@ def normalize_company_name(name: Optional[str]) -> str:
     - Converting to lowercase
     - Replacing punctuation with spaces
     - Collapsing extra whitespace
+    - Stripping bank statement noise tokens (PAYMENT, NEFT, RTGS, CR, etc.) and reference pattern tokens
     - Removing legal company suffixes (Pvt, Private, Ltd, Limited, Inc, Corp, LLP, Co, etc.)
     - Standardizing common abbreviations (e.g. Enterprise -> Enterprises)
     
@@ -52,8 +60,17 @@ def normalize_company_name(name: Optional[str]) -> str:
     # Replace punctuation with spaces (keep alphanumeric and space)
     clean_name = re.sub(r"[^\w\s]", " ", clean_name)
 
-    # Collapse multiple spaces
-    tokens = [t for t in clean_name.split() if t]
+    # Collapse multiple spaces and tokenize
+    raw_tokens = [t for t in clean_name.split() if t]
+
+    # Filter out bank feed noise words and reference pattern tokens (e.g. ref001, inv001, 2026-001)
+    tokens = []
+    for t in raw_tokens:
+        if t in TRANSACTION_NOISE_WORDS:
+            continue
+        if re.match(r"^(ref|inv|pay)\d+$", t) or re.match(r"^\d{4}\d+$", t):
+            continue
+        tokens.append(t)
 
     # Iteratively remove legal suffixes from the end of token list
     while tokens:
