@@ -162,9 +162,16 @@ Invoice CSV                 Bank CSV                 Gateway CSV
 
 ## ⏱️ Presentation & Hackathon Guides
 
-- 📘 [**5-Minute Demo Script**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_SCRIPT.md) — Timed presentation script for hackathon judges.
+- 📄 [**1-Page Executive Summary**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/PROJECT_SUMMARY.md) — One-page judge overview.
+- 📊 [**Presentation Deck Content**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/PRESENTATION.md) — 8-slide presentation deck content.
+- 🎙️ [**3-Minute Pitch Script**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/PITCH_3_MIN.md) — Timed 3-minute spoken presentation script.
+- 🎙️ [**5-Minute Pitch Script**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/PITCH_5_MIN.md) — Timed 5-minute spoken presentation script.
+- 📘 [**5-Minute Demo Script**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_SCRIPT.md) — Step-by-step UI presentation walkthrough.
 - 📌 [**Demo Highlight Records Directory**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/DEMO_RECORDS.md) — Authentic sample IDs (`INV001`, `INV066`, `INV081`, `INV091`, `INV099`, `INV104`, `INV109`, `INV113`).
-- ❓ [**Judge Q&A Guide**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/JUDGE_QA.md) — Concise answers for the 10 likely judge technical questions.
+- ❓ [**20-Question Judge Q&A Guide**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/JUDGE_QA.md) — Comprehensive technical judge Q&A guide.
+- ✅ [**Final Demo & Offline Backup Checklist**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/FINAL_DEMO_CHECKLIST.md) — Live checklist and offline local execution backup guide.
+- 📸 [**UI Screenshot Checklist**](file:///c:/Users/yashwanthteja/Documents/razorpay/ai-finance-controller/SCREENSHOT_CHECKLIST.md) — 9 UI screenshots to capture for presentation slides.
+
 
 ---
 
