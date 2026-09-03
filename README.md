@@ -1,8 +1,9 @@
 # AI Finance Controller — Multi-Source Reconciliation
 
-[![Status](https://img.shields.io/badge/Status-Phase%2014%20Completed-emerald.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
-[![Tests](https://img.shields.io/badge/Tests-86%2F86%20Passed-blue.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
+[![Status](https://img.shields.io/badge/Status-Phase%2016%20Completed-emerald.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
+[![Tests](https://img.shields.io/badge/Tests-112%2F112%20Passed-blue.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
 [![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/yashwanth31-B/ai-finance-controller)
+
 
 An enterprise-grade, high-throughput multi-source financial reconciliation platform designed to automatically ingest, normalize, reconcile, and audit multi-source transaction datasets across:
 

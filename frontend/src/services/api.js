@@ -10,6 +10,15 @@ export const apiClient = axios.create({
   },
 });
 
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+
 /**
  * Fetch root application metadata from backend.
  * GET / -> { "name": "AI Finance Controller", "status": "running" }
@@ -148,6 +157,106 @@ export const getAuditTrail = async (params = {}) => {
  */
 export const analyzeExceptionWithAI = async (payload) => {
   const response = await apiClient.post('/api/ai/analyze-exception', payload);
+  return response.data;
+};
+
+/**
+ * Helper to download binary or text files from reports endpoints.
+ */
+export const downloadReportFile = async (endpoint, defaultFilename) => {
+  const response = await apiClient.get(endpoint, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], {
+    type: response.headers['content-type'] || 'application/octet-stream',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  
+  const disposition = response.headers['content-disposition'];
+  let filename = defaultFilename;
+  if (disposition && disposition.includes('filename=')) {
+    const matches = /filename="?([^";]+)"?/.exec(disposition);
+    if (matches && matches[1]) {
+      filename = matches[1];
+    }
+  }
+  
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const downloadReconciliationCSV = () => downloadReportFile('/api/reports/reconciliation.csv', 'reconciliation_report.csv');
+export const downloadExceptionsCSV = () => downloadReportFile('/api/reports/exceptions.csv', 'exceptions_report.csv');
+export const downloadAuditCSV = () => downloadReportFile('/api/reports/audit.csv', 'audit_trail_report.csv');
+export const downloadSummaryPDF = () => downloadReportFile('/api/reports/summary.pdf', 'reconciliation_summary.pdf');
+
+/**
+ * Fetch current system settings and reconciliation tolerances.
+ * GET /api/settings
+ */
+export const getSettings = async () => {
+  const response = await apiClient.get('/api/settings');
+  return response.data;
+};
+
+/**
+ * Update system settings and reconciliation rules.
+ * PUT /api/settings
+ */
+export const updateSettings = async (payload) => {
+  const response = await apiClient.put('/api/settings', payload);
+  return response.data;
+};
+
+/**
+ * Reset system settings to safe defaults.
+ * POST /api/settings/reset
+ */
+export const resetSettings = async () => {
+  const response = await apiClient.post('/api/settings/reset');
+  return response.data;
+};
+
+/** Auth Endpoints */
+export const loginUser = async (email, password) => {
+  const response = await apiClient.post('/api/auth/login', { email, password });
+  return response.data;
+};
+
+export const getCurrentUser = async () => {
+  const response = await apiClient.get('/api/auth/me');
+  return response.data;
+};
+
+export const logoutUser = async () => {
+  const response = await apiClient.post('/api/auth/logout');
+  return response.data;
+};
+
+/** Notification Endpoints */
+export const getNotifications = async (params = {}) => {
+  const response = await apiClient.get('/api/notifications', { params });
+  return response.data;
+};
+
+export const markNotificationRead = async (id) => {
+  const response = await apiClient.post(`/api/notifications/${id}/read`);
+  return response.data;
+};
+
+export const markAllNotificationsRead = async () => {
+  const response = await apiClient.post('/api/notifications/read-all');
+  return response.data;
+};
+
+/** Assistant Q&A Endpoint */
+export const queryAssistant = async (question) => {
+  const response = await apiClient.post('/api/assistant/query', { question });
   return response.data;
 };
 

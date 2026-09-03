@@ -10,11 +10,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-from routes import health, demo_data, reconciliation, exceptions, metrics, upload, reviews, ai_assistant
+from routes import health, demo_data, reconciliation, exceptions, metrics, upload, reviews, ai_assistant, reports, settings, auth, notifications, assistant
 from schemas import RootInfoResponse
+from services.auth import seed_demo_users
 
-# Initialize database tables
+# Initialize database tables & seed demo user accounts
 Base.metadata.create_all(bind=engine)
+seed_demo_users()
 
 # Create FastAPI application
 app = FastAPI(
@@ -64,6 +66,11 @@ app.include_router(metrics.router)
 app.include_router(upload.router)
 app.include_router(reviews.router)
 app.include_router(ai_assistant.router)
+app.include_router(reports.router)
+app.include_router(settings.router)
+app.include_router(auth.router)
+app.include_router(notifications.router)
+app.include_router(assistant.router)
 
 
 

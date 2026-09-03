@@ -195,4 +195,68 @@ class RunUploadedRequest(BaseModel):
     upload_batch_id: str
 
 
+class SettingsResponse(BaseModel):
+    amount_tolerance: float
+    date_tolerance_days: int
+    auto_match_threshold: float
+    review_threshold: float
+    fuzzy_similarity_threshold: float
+    candidate_score_gap: float
+    updated_at: Optional[str] = None
+
+
+class SettingsUpdateRequest(BaseModel):
+    amount_tolerance: float
+    date_tolerance_days: int
+    auto_match_threshold: float
+    review_threshold: float
+    fuzzy_similarity_threshold: float
+    candidate_score_gap: float
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    role: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class NotificationItem(BaseModel):
+    notification_id: str
+    type: str
+    title: str
+    message: str
+    invoice_id: Optional[str] = None
+    batch_id: Optional[str] = None
+    is_read: bool
+    created_at: str
+
+
+class NotificationReadResponse(BaseModel):
+    success: bool
+    marked_count: int
+
+
+class AssistantQueryRequest(BaseModel):
+    question: str
+
+
+class AssistantQueryResponse(BaseModel):
+    answer: str
+    related_invoice_ids: list[str] = []
+    data_sources_used: list[str] = []
+
+
+
 

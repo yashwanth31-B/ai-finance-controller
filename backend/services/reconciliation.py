@@ -2,13 +2,7 @@
 Multi-Source 3-Way Reconciliation Engine & Exception Classifier
 ================================================================
 Runs deterministic & fuzzy matching across Invoice, Bank Transaction, and Payment Gateway records,
-classifying exceptions and generating structured audit records.
-
-Classification Thresholds:
-- 90 to 100: MATCHED
-- 70 to 89: REVIEW
-- Below 70: EXCEPTION
-- Ambiguous top candidates: REVIEW (with reason "AMBIGUOUS_CANDIDATES")
+classifying exceptions and generating structured audit records based on dynamic system settings.
 """
 
 import os
@@ -16,14 +10,19 @@ import csv
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
+from sqlalchemy.orm import Session
+
 from services.normalization import normalize_record
 from services.scoring import score_candidate
+from services.settings import get_active_settings
 from services.exceptions import (
     reset_exceptions_cache,
     generate_exception_record,
     SEVERITY_LEVELS,
     SUGGESTED_ACTIONS
 )
+from services.notifications import create_notification
+
 
 
 # Global in-memory cache for latest reconciliation execution results
@@ -43,19 +42,30 @@ def load_csv_records(file_path: str) -> List[Dict[str, Any]]:
 def run_reconciliation_batch(
     invoices: List[Dict[str, Any]],
     bank_txns: List[Dict[str, Any]],
-    gateway_txns: List[Dict[str, Any]]
+    gateway_txns: List[Dict[str, Any]],
+    db: Optional[Session] = None
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Executes 3-way reconciliation on provided raw records batches.
+    Executes 3-way reconciliation on provided raw records batches using active system settings.
     
-    1. Normalizes all records in memory
-    2. Searches best candidates for Bank and Gateway using RapidFuzz matching
-    3. Calculates deterministic & fuzzy confidence scores
-    4. Detects transaction reuse / duplicate payment conflicts across batch
-    5. Classifies exceptions across 10 discrepancy categories
+    1. Reads active settings (amount_tolerance, date_tolerance_days, thresholds, candidate_score_gap)
+    2. Normalizes all records in memory
+    3. Searches best candidates for Bank and Gateway using RapidFuzz matching & active settings
+    4. Calculates deterministic & fuzzy confidence scores
+    5. Detects transaction reuse / duplicate payment conflicts across batch
+    6. Classifies exceptions across discrepancy categories according to configured rules
     """
     start_time = time.time()
     batch_id = f"batch-{uuid.uuid4().hex[:8]}"
+
+    # Fetch active settings
+    settings = get_active_settings(db=db)
+    amount_tolerance = float(settings.get("amount_tolerance", 0.0))
+    date_tolerance_days = int(settings.get("date_tolerance_days", 3))
+    auto_match_threshold = float(settings.get("auto_match_threshold", 90.0))
+    review_threshold = float(settings.get("review_threshold", 70.0))
+    fuzzy_similarity_threshold = float(settings.get("fuzzy_similarity_threshold", 70.0))
+    candidate_score_gap_threshold = float(settings.get("candidate_score_gap", 10.0))
 
     # Reset exceptions cache for fresh run execution
     reset_exceptions_cache()
@@ -64,10 +74,6 @@ def run_reconciliation_batch(
     norm_invoices = [normalize_record(inv) for inv in invoices]
     norm_bank = [normalize_record(b) for b in bank_txns]
     norm_gateway = [normalize_record(g) for g in gateway_txns]
-
-    # Pre-index candidates by ID for fast lookup
-    bank_by_id = {str(b["original"].get("transaction_id", "")): b for b in norm_bank}
-    gw_by_id = {str(g["original"].get("payment_id", "")): g for g in norm_gateway}
 
     prelim_results: List[Dict[str, Any]] = []
     bank_id_assignments: Dict[str, List[str]] = {}
@@ -83,7 +89,7 @@ def run_reconciliation_batch(
         for b_item in norm_bank:
             raw_b = b_item["original"]
             b_norm = b_item["normalized"]
-            score_res = score_candidate(inv_norm, b_norm, raw_b)
+            score_res = score_candidate(inv_norm, b_norm, raw_b, settings=settings)
             bank_scores.append({
                 "raw": raw_b,
                 "score_res": score_res,
@@ -98,7 +104,7 @@ def run_reconciliation_batch(
         for g_item in norm_gateway:
             raw_g = g_item["original"]
             g_norm = g_item["normalized"]
-            score_res = score_candidate(inv_norm, g_norm, raw_g)
+            score_res = score_candidate(inv_norm, g_norm, raw_g, settings=settings)
             gateway_scores.append({
                 "raw": raw_g,
                 "score_res": score_res,
@@ -136,16 +142,16 @@ def run_reconciliation_batch(
         )
         candidate_score_gap = round(best_candidate_score - second_best_candidate_score, 2)
 
-        # Ambiguity Check: difference < 5 pts and both candidates above review threshold (>= 70)
+        # Ambiguity Check based on configured candidate_score_gap_threshold
         is_bank_ambiguous = (
             len(bank_scores) >= 2 and
-            bank_scores[0]["score"] >= 60.0 and
-            (bank_scores[0]["score"] - bank_scores[1]["score"]) < 5.0
+            bank_scores[0]["score"] >= review_threshold and
+            (bank_scores[0]["score"] - bank_scores[1]["score"]) < candidate_score_gap_threshold
         )
         is_gw_ambiguous = (
             len(gateway_scores) >= 2 and
-            gateway_scores[0]["score"] >= 60.0 and
-            (gateway_scores[0]["score"] - gateway_scores[1]["score"]) < 5.0
+            gateway_scores[0]["score"] >= review_threshold and
+            (gateway_scores[0]["score"] - gateway_scores[1]["score"]) < candidate_score_gap_threshold
         )
         is_ambiguous = is_bank_ambiguous or is_gw_ambiguous
 
@@ -258,7 +264,7 @@ def run_reconciliation_batch(
             except (ValueError, TypeError):
                 pass
 
-        # Initial Status Determination
+        # Initial Status Determination using active configured thresholds
         if is_duplicate:
             status = "EXCEPTION"
             matching_method = "NO_MATCH"
@@ -266,27 +272,25 @@ def run_reconciliation_batch(
         elif is_ambiguous:
             status = "REVIEW"
             matching_method = "AMBIGUOUS"
-            explanation = "Multiple possible matches identified with identical or close confidence scores (AMBIGUOUS_CANDIDATES)."
-        elif overall_confidence >= 90.0:
+            explanation = f"Multiple possible matches identified within candidate score gap ({candidate_score_gap_threshold} pts)."
+        elif overall_confidence >= auto_match_threshold:
             status = "MATCHED"
             matching_method = cand_matching_method
-            explanation = f"High-confidence match verified across records using {matching_method} matching."
+            explanation = f"High-confidence match (score {overall_confidence} >= {auto_match_threshold}) verified across records using {matching_method} matching."
         elif is_gateway_fee_case:
             status = "REVIEW"
             matching_method = cand_matching_method if cand_matching_method != "NO_MATCH" else "NORMALIZED"
             explanation = f"Gateway net settlement (₹{gw_net}) differs from gross invoice (₹{inv_amt}) due to ₹{gw_fee} gateway fee."
-        elif overall_confidence >= 70.0:
+        elif overall_confidence >= review_threshold:
             status = "REVIEW"
             matching_method = cand_matching_method if cand_matching_method != "NO_MATCH" else "FUZZY"
-            explanation = f"Moderate confidence match (score {overall_confidence}). Manual review required."
+            explanation = f"Moderate confidence match (score {overall_confidence} >= {review_threshold}). Manual review required."
         else:
             status = "EXCEPTION"
             matching_method = "NO_MATCH"
-            explanation = f"Low confidence match (score {overall_confidence}) or missing payment records."
+            explanation = f"Low confidence match (score {overall_confidence} < {review_threshold}) or missing payment records."
 
         # Exception Classification & Record Generation
-        # Trigger on: non-MATCHED status, duplicate, or missing feed
-        # POSSIBLE_GATEWAY_FEE only when bank matches invoice amount perfectly
         exc_id = None
         exc_type = None
         severity = None
@@ -294,7 +298,6 @@ def run_reconciliation_batch(
 
         has_missing_feed = (selected_bank_id is None) or (selected_gw_id is None)
 
-        # Gateway fee case only applies when bank amount matches invoice exactly
         bank_cand_amt = 0.0
         if selected_bank_id:
             top_b_raw = p["top_bank"]["raw"] if p["top_bank"] else {}
@@ -302,11 +305,8 @@ def run_reconciliation_batch(
                 bank_cand_amt = float(top_b_raw.get("amount", 0.0))
             except (ValueError, TypeError):
                 pass
-        bank_matches_perfectly = selected_bank_id and abs(inv_amt - bank_cand_amt) < 0.01
-        # POSSIBLE_GATEWAY_FEE is an informational audit exception — surface it whenever
-        # bank reconciles the invoice perfectly but gateway net_amount differs due to fee.
+        bank_matches_perfectly = selected_bank_id and abs(inv_amt - bank_cand_amt) <= (amount_tolerance + 1e-6)
         reportable_gateway_fee = is_gateway_fee_case and bank_matches_perfectly
-
 
         if status != "MATCHED" or is_duplicate or has_missing_feed or reportable_gateway_fee:
             top_b = p["top_bank"]
@@ -327,7 +327,7 @@ def run_reconciliation_batch(
                     pass
                 cand_curr = str(gw_cand.get("currency", ""))
 
-            # Classify in priority order
+            # Classify in priority order using configured tolerances
             if is_duplicate:
                 exc_type = "DUPLICATE_PAYMENT"
                 reason = f"Payment record (Bank: {selected_bank_id}, Gateway: {selected_gw_id}) is reused across multiple invoices."
@@ -336,34 +336,34 @@ def run_reconciliation_batch(
                 reason = f"Currency mismatch: Invoice ({p['invoice_currency']}) vs Payment ({cand_curr})."
             elif is_ambiguous:
                 exc_type = "AMBIGUOUS_MATCH"
-                reason = "Multiple candidate payments yielded identical or close confidence scores."
+                reason = f"Multiple candidate payments yielded scores within candidate score gap ({candidate_score_gap_threshold} pts)."
             elif selected_bank_id is None and selected_gw_id is None:
                 exc_type = "MISSING_BANK_PAYMENT"
                 reason = "No viable bank or gateway payment candidate was found for this invoice."
             elif selected_bank_id is None:
                 exc_type = "MISSING_BANK_PAYMENT"
                 reason = "No matching bank statement transaction found for invoice."
-            elif cand_amt > 0 and abs(inv_amt - cand_amt) >= 0.01 and not reportable_gateway_fee:
+            elif cand_amt > 0 and abs(inv_amt - cand_amt) > (amount_tolerance + 1e-6) and not reportable_gateway_fee:
                 exc_type = "AMOUNT_MISMATCH"
-                reason = f"Amount discrepancy: Invoice (₹{inv_amt}) vs Payment (₹{cand_amt})."
+                reason = f"Amount discrepancy: Invoice (₹{inv_amt}) vs Payment (₹{cand_amt}) exceeds tolerance (₹{amount_tolerance})."
             elif selected_gw_id is None:
                 exc_type = "MISSING_GATEWAY_PAYMENT"
                 reason = "No matching payment gateway settlement found for invoice."
             elif reportable_gateway_fee:
                 exc_type = "POSSIBLE_GATEWAY_FEE"
                 reason = f"Gateway net settlement (₹{gw_net}) differs from invoice (₹{inv_amt}) due to ₹{gw_fee} gateway fee."
-            elif cand_amt > 0 and abs(inv_amt - cand_amt) >= 0.01:
+            elif cand_amt > 0 and abs(inv_amt - cand_amt) > (amount_tolerance + 1e-6):
                 exc_type = "AMOUNT_MISMATCH"
-                reason = f"Amount discrepancy: Invoice (₹{inv_amt}) vs Payment (₹{cand_amt})."
+                reason = f"Amount discrepancy: Invoice (₹{inv_amt}) vs Payment (₹{cand_amt}) exceeds tolerance (₹{amount_tolerance})."
             elif "customer_name" in p["mismatched_fields_set"] and (top_b or top_g):
                 exc_type = "CUSTOMER_MISMATCH"
-                reason = f"Weak customer name alignment: '{p['customer_name']}'."
+                reason = f"Weak customer name alignment (below {fuzzy_similarity_threshold}% fuzzy threshold): '{p['customer_name']}'."
             elif "reference" in p["mismatched_fields_set"] and (top_b or top_g):
                 exc_type = "REFERENCE_MISMATCH"
                 reason = f"Reference mismatch for invoice '{inv_id}'."
             elif "date" in p["mismatched_fields_set"] and (top_b or top_g):
                 exc_type = "DATE_OUT_OF_RANGE"
-                reason = f"Payment date is outside allowed proximity tolerance for invoice '{inv_id}'."
+                reason = f"Payment date is outside allowed proximity tolerance ({date_tolerance_days} days) for invoice '{inv_id}'."
             else:
                 exc_type = "AMOUNT_MISMATCH"
                 reason = f"Reconciliation discrepancy for invoice '{inv_id}'."
@@ -446,6 +446,38 @@ def run_reconciliation_batch(
     global LATEST_RECONCILIATION_BATCH, LATEST_RECONCILIATION_RESULTS
     LATEST_RECONCILIATION_BATCH = summary
     LATEST_RECONCILIATION_RESULTS = {item["invoice_id"]: item for item in results}
+
+    # Emit real system notifications for completed batch
+    try:
+        create_notification(
+            type="SUCCESS",
+            title="Reconciliation Batch Completed",
+            message=f"Reconciliation batch {batch_id} completed successfully ({matched_count} matched, {review_count} review, {exception_count} exceptions).",
+            batch_id=batch_id,
+            db=db
+        )
+        if exception_count > 0:
+            create_notification(
+                type="CRITICAL",
+                title="Exceptions Detected",
+                message=f"{exception_count} reconciliation exceptions detected in batch {batch_id}.",
+                batch_id=batch_id,
+                db=db
+            )
+
+        review_records = [r for r in results if r.get("status") == "REVIEW"]
+        if review_records:
+            top_rev = review_records[0]
+            create_notification(
+                type="WARNING",
+                title="Manual Review Required",
+                message=f"{top_rev['invoice_id']} requires manual review.",
+                invoice_id=top_rev['invoice_id'],
+                batch_id=batch_id,
+                db=db
+            )
+    except Exception:
+        pass
 
     return summary, results
 

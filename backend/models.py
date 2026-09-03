@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean
 from database import Base
 
 
@@ -55,3 +55,48 @@ class AuditEventDB(Base):
     new_state = Column(String)
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class SystemSettings(Base):
+    """Persistent configuration for multi-source reconciliation rules and thresholds."""
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    amount_tolerance = Column(Float, default=0.0)
+    date_tolerance_days = Column(Integer, default=3)
+    auto_match_threshold = Column(Float, default=90.0)
+    review_threshold = Column(Float, default=70.0)
+    fuzzy_similarity_threshold = Column(Float, default=70.0)
+    candidate_score_gap = Column(Float, default=10.0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class UserDB(Base):
+    """User account model for authentication and role-based access control."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, unique=True)
+    email = Column(String, index=True, unique=True)
+    name = Column(String)
+    hashed_password = Column(String)
+    role = Column(String, default="REVIEWER")  # ADMIN, REVIEWER, VIEWER
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class NotificationDB(Base):
+    """Notification model for system alerts and reconciliation events."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    notification_id = Column(String, index=True, unique=True)
+    role = Column(String, nullable=True)  # Target role or None for all
+    type = Column(String, default="INFO")  # INFO, SUCCESS, WARNING, CRITICAL
+    title = Column(String)
+    message = Column(Text)
+    invoice_id = Column(String, nullable=True)
+    batch_id = Column(String, nullable=True)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+

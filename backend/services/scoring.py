@@ -3,26 +3,10 @@ Deterministic & Fuzzy Candidate Scoring Engine
 ===============================================
 Computes a match score (0 to 100 points) between a normalized invoice and a candidate record
 (Bank transaction or Payment Gateway payment) combining exact normalized criteria and RapidFuzz fuzzy matching.
-
-Scoring Rules:
-- Amount match: 40 points (exact normalized amount match)
-- Customer Name match: 20 points max
-  - Exact normalized match: 20 pts
-  - Fuzzy score 90 - 100: 18 pts
-  - Fuzzy score 80 - 89: 15 pts
-  - Fuzzy score 70 - 79: 10 pts
-  - Below 70: 0 pts
-- Reference match: 20 points max
-  - Exact normalized match: 20 pts
-  - Conservative fuzzy match (score >= 90): 15 pts
-  - Below 90: 0 pts
-- Date proximity: 15 points (0 days = 15, 1 day = 13, 2 days = 10, 3 days = 7, >3 days = 0)
-- Currency match: 5 points (exact normalized 3-letter currency code match)
-Total: 100 points max
 """
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from services.fuzzy_matching import (
     fuzzy_company_name_similarity,
     fuzzy_description_similarity,
@@ -42,21 +26,30 @@ def calculate_date_difference(date_str1: str, date_str2: str) -> int:
         return 999
 
 
-def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any], raw_candidate: Dict[str, Any] = None) -> Dict[str, Any]:
+def score_candidate(
+    invoice_norm: Dict[str, Any],
+    candidate_norm: Dict[str, Any],
+    raw_candidate: Dict[str, Any] = None,
+    settings: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
-    Computes candidate match score against an invoice using normalized fields and RapidFuzz matching.
-    Returns detailed score breakdown, total score (0 to 100), matched/mismatched fields, and matching method.
+    Computes candidate match score against an invoice using normalized fields, RapidFuzz matching,
+    and configured system tolerances/thresholds.
     """
     matched_fields: List[str] = []
     mismatched_fields: List[str] = []
     used_fuzzy = False
+
+    amount_tolerance = float(settings.get("amount_tolerance", 0.0)) if settings else 0.0
+    date_tolerance_days = int(settings.get("date_tolerance_days", 3)) if settings else 3
+    fuzzy_similarity_threshold = float(settings.get("fuzzy_similarity_threshold", 70.0)) if settings else 70.0
 
     # 1. Amount Match (40 pts)
     inv_amount = invoice_norm.get("amount")
     cand_amount = candidate_norm.get("amount")
     amount_score = 0.0
 
-    if inv_amount is not None and cand_amount is not None and abs(inv_amount - cand_amount) < 0.001:
+    if inv_amount is not None and cand_amount is not None and abs(inv_amount - cand_amount) <= (amount_tolerance + 1e-6):
         amount_score = 40.0
         matched_fields.append("amount")
     else:
@@ -77,17 +70,14 @@ def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any]
         customer_score = 20.0
         fuzzy_customer_score = 100.0
         matched_fields.append("customer_name")
-    elif best_name_sim >= 90.0:
-        customer_score = 18.0
+    elif best_name_sim >= fuzzy_similarity_threshold:
         used_fuzzy = True
-        matched_fields.append("customer_name")
-    elif best_name_sim >= 80.0:
-        customer_score = 15.0
-        used_fuzzy = True
-        matched_fields.append("customer_name")
-    elif best_name_sim >= 70.0:
-        customer_score = 10.0
-        used_fuzzy = True
+        if best_name_sim >= 90.0:
+            customer_score = 18.0
+        elif best_name_sim >= 80.0:
+            customer_score = 15.0
+        else:
+            customer_score = 10.0
         matched_fields.append("customer_name")
     else:
         mismatched_fields.append("customer_name")
@@ -119,18 +109,18 @@ def score_candidate(invoice_norm: Dict[str, Any], candidate_norm: Dict[str, Any]
     date_diff = calculate_date_difference(inv_date, cand_date)
     date_score = 0.0
 
-    if date_diff == 0:
-        date_score = 15.0
+    if date_diff <= date_tolerance_days:
         matched_fields.append("date")
-    elif date_diff == 1:
-        date_score = 13.0
-        matched_fields.append("date")
-    elif date_diff == 2:
-        date_score = 10.0
-        matched_fields.append("date")
-    elif date_diff == 3:
-        date_score = 7.0
-        matched_fields.append("date")
+        if date_diff == 0:
+            date_score = 15.0
+        elif date_diff == 1:
+            date_score = 13.0
+        elif date_diff == 2:
+            date_score = 10.0
+        elif date_diff == 3:
+            date_score = 7.0
+        else:
+            date_score = max(3.0, round(15.0 - (date_diff / max(1, date_tolerance_days)) * 10.0, 1))
     else:
         mismatched_fields.append("date")
 

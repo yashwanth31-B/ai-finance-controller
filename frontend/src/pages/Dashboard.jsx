@@ -26,8 +26,12 @@ import ReconciliationDetailModal from '../components/ReconciliationDetailModal';
 import ExceptionDetailModal from '../components/ExceptionDetailModal';
 import { getMetrics, getReconciliationResults, getExceptions, runReconciliation } from '../services/api';
 import { STATUS_COLORS, SEVERITY_COLORS } from '../utils/constants';
+import { useTheme } from '../context/ThemeContext';
 
 export const Dashboard = () => {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
   const [metrics, setMetrics] = useState(null);
   const [results, setResults] = useState([]);
   const [exceptions, setExceptions] = useState([]);
@@ -275,11 +279,17 @@ export const Dashboard = () => {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-                  itemStyle={{ color: '#f8fafc' }}
+                  contentStyle={{
+                    backgroundColor: isLight ? '#ffffff' : '#0f172a',
+                    borderColor: isLight ? '#cbd5e1' : '#334155',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: isLight ? '#0f172a' : '#f8fafc'
+                  }}
+                  itemStyle={{ color: isLight ? '#0f172a' : '#f8fafc' }}
                 />
                 <Legend
-                  formatter={(value) => <span className="text-xs text-slate-300 font-medium">{value}</span>}
+                  formatter={(value) => <span className={`text-xs font-medium ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{value}</span>}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -303,15 +313,21 @@ export const Dashboard = () => {
                 <BarChart data={exceptionBarData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
                   <XAxis
                     dataKey="name"
-                    stroke="#64748b"
+                    stroke={isLight ? '#475569' : '#94a3b8'}
                     fontSize={10}
                     interval={0}
                     angle={-20}
                     textAnchor="end"
                   />
-                  <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
+                  <YAxis stroke={isLight ? '#475569' : '#94a3b8'} fontSize={11} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                    contentStyle={{
+                      backgroundColor: isLight ? '#ffffff' : '#0f172a',
+                      borderColor: isLight ? '#cbd5e1' : '#334155',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: isLight ? '#0f172a' : '#f8fafc'
+                    }}
                     itemStyle={{ color: '#f43f5e' }}
                   />
                   <Bar dataKey="count" fill="#f43f5e" radius={[4, 4, 0, 0]} />

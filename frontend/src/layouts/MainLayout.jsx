@@ -5,12 +5,14 @@ import Header from '../components/Header';
 import useApiHealth from '../hooks/useApiHealth';
 import { AlertCircle } from 'lucide-react';
 
+import AIAssistantDrawer from '../components/AIAssistantDrawer';
+
 export const MainLayout = () => {
   const { status, appInfo, lastChecked, error, refresh } = useApiHealth(15000);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100 antialiased font-sans">
+    <div className="flex min-h-screen bg-slate-950 dark:bg-slate-950 light:bg-slate-50 text-slate-100 dark:text-slate-100 light:text-slate-900 antialiased font-sans transition-colors">
       {/* Navigation Sidebar */}
       <Sidebar
         apiStatus={status}
@@ -51,6 +53,9 @@ export const MainLayout = () => {
           <Outlet context={{ apiStatus: status, appInfo, refreshApi: refresh }} />
         </main>
       </div>
+
+      {/* Floating Ask Finance AI Assistant Drawer */}
+      <AIAssistantDrawer />
     </div>
   );
 };
